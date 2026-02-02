@@ -105,6 +105,7 @@ export default function BehavioralDataScreen() {
     });
 
     const gyroSubscription = Gyroscope.addListener(data => {
+      console.log('RAW GYRO EVENT', data);
       setGyroData(data);
 
       // Derived Gyro Features
