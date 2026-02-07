@@ -12,12 +12,25 @@ export type EmittedBehavioralPayload = {
   signature: string;
 };
 
+export type BehaviorEventType =
+  | 'LOGIN_SUCCESS'
+  | 'LOGOUT'
+  | 'VIEW_DASHBOARD'
+  | 'VIEW_ACCOUNT'
+  | 'VIEW_TRANSACTION'
+  | 'PAY_INIT'
+  | 'PAY_CONFIRM'
+  | 'CHANGE_PIN';
+
+
 export class BehavioralCollector {
   private accel: Vec3[] = [];
   private gyro: Vec3[] = [];
   private touches: { x: number; y: number; t: number }[] = [];
   private scrolls: { dy: number; t: number }[] = [];
   private keys: number[] = [];
+
+  private events: { type: BehaviorEventType; t: number }[] = [];
 
   private windowMs = 2000;
   private timer: any;
@@ -51,11 +64,13 @@ export class BehavioralCollector {
   /* ───── CONTROL ───── */
 
   async start() {
+    console.log("start");
     await SigningService.init();
 
     this.timer = setInterval(async () => {
       const payload = await this.emitVector();
       this.onEmit?.(payload);
+      console.log(payload)
       this.reset();
     }, this.windowMs);
   }

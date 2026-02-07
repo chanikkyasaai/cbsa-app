@@ -1,112 +1,104 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import React, { useState, useMemo } from 'react';
+import { View, Text, StyleSheet, TextInput, FlatList, TouchableOpacity } from 'react-native';
+import { useBehavioralCollector } from '@/services/BehavioralContext';
+import { router } from 'expo-router';
 
-import { Collapsible } from '@/components/ui/collapsible';
-import { ExternalLink } from '@/components/external-link';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { Fonts } from '@/constants/theme';
 
-export default function TabTwoScreen() {
+const collector = useBehavioralCollector();
+
+const TRANSACTIONS = [
+  { id: '1', name: 'Amazon', amount: -1299, date: 'Today, 14:32', status: 'Completed' },
+  { id: '2', name: 'Rahul', amount: 5000, date: 'Yesterday, 09:10', status: 'Completed' },
+  { id: '3', name: 'Uber', amount: -240, date: 'Sep 12, 21:18', status: 'Completed' },
+  { id: '4', name: 'Netflix', amount: -499, date: 'Sep 10, 08:00', status: 'Pending' },
+  { id: '5', name: 'Swiggy', amount: -620, date: 'Sep 9, 20:45', status: 'Completed' },
+];
+
+export default function ActivityScreen() {
+  const [query, setQuery] = useState('');
+
+  const filtered = useMemo(() => {
+    if (!query) return TRANSACTIONS;
+    return TRANSACTIONS.filter(tx =>
+      tx.name.toLowerCase().includes(query.toLowerCase())
+    );
+  }, [query]);
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#D0D0D0', dark: '#353636' }}
-      headerImage={
-        <IconSymbol
-          size={310}
-          color="#808080"
-          name="chevron.left.forwardslash.chevron.right"
-          style={styles.headerImage}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText
-          type="title"
-          style={{
-            fontFamily: Fonts.rounded,
-          }}>
-          Explore
-        </ThemedText>
-      </ThemedView>
-      <ThemedText>This app includes example code to help you get started.</ThemedText>
-      <Collapsible title="File-based routing">
-        <ThemedText>
-          This app has two screens:{' '}
-          <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> and{' '}
-          <ThemedText type="defaultSemiBold">app/(tabs)/explore.tsx</ThemedText>
-        </ThemedText>
-        <ThemedText>
-          The layout file in <ThemedText type="defaultSemiBold">app/(tabs)/_layout.tsx</ThemedText>{' '}
-          sets up the tab navigator.
-        </ThemedText>
-        <ExternalLink href="https://docs.expo.dev/router/introduction">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Android, iOS, and web support">
-        <ThemedText>
-          You can open this project on Android, iOS, and the web. To open the web version, press{' '}
-          <ThemedText type="defaultSemiBold">w</ThemedText> in the terminal running this project.
-        </ThemedText>
-      </Collapsible>
-      <Collapsible title="Images">
-        <ThemedText>
-          For static images, you can use the <ThemedText type="defaultSemiBold">@2x</ThemedText> and{' '}
-          <ThemedText type="defaultSemiBold">@3x</ThemedText> suffixes to provide files for
-          different screen densities
-        </ThemedText>
-        <Image
-          source={require('@/assets/images/react-logo.png')}
-          style={{ width: 100, height: 100, alignSelf: 'center' }}
-        />
-        <ExternalLink href="https://reactnative.dev/docs/images">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Light and dark mode components">
-        <ThemedText>
-          This template has light and dark mode support. The{' '}
-          <ThemedText type="defaultSemiBold">useColorScheme()</ThemedText> hook lets you inspect
-          what the user&apos;s current color scheme is, and so you can adjust UI colors accordingly.
-        </ThemedText>
-        <ExternalLink href="https://docs.expo.dev/develop/user-interface/color-themes/">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Animations">
-        <ThemedText>
-          This template includes an example of an animated component. The{' '}
-          <ThemedText type="defaultSemiBold">components/HelloWave.tsx</ThemedText> component uses
-          the powerful{' '}
-          <ThemedText type="defaultSemiBold" style={{ fontFamily: Fonts.mono }}>
-            react-native-reanimated
-          </ThemedText>{' '}
-          library to create a waving hand animation.
-        </ThemedText>
-        {Platform.select({
-          ios: (
-            <ThemedText>
-              The <ThemedText type="defaultSemiBold">components/ParallaxScrollView.tsx</ThemedText>{' '}
-              component provides a parallax effect for the header image.
-            </ThemedText>
-          ),
-        })}
-      </Collapsible>
-    </ParallaxScrollView>
+    <View style={styles.container}>
+      <TextInput
+        placeholder="Search transactions"
+        style={styles.search}
+        value={query}
+        onChangeText={(s) => {
+          collector?.recordKeystroke()
+          setQuery(s)
+        }}
+      />
+
+      <FlatList
+        data={filtered}
+        keyExtractor={item => item.id}
+        keyboardShouldPersistTaps="handled"
+        renderItem={({ item }) => (
+          <TouchableOpacity
+            style={styles.txRow}
+            onPress={() => router.push('/transaction/1')}
+            onPressIn={e =>
+              collector?.recordTouchStart(
+                e.nativeEvent.pageX,
+                e.nativeEvent.pageY
+              )
+            }
+            onPressOut={e =>
+              collector?.recordTouchEnd(
+                e.nativeEvent.pageX,
+                e.nativeEvent.pageY
+              )
+            }
+          >
+            <View>
+              <Text style={styles.txName}>{item.name}</Text>
+              <Text style={styles.txDate}>{item.date}</Text>
+            </View>
+            <View style={styles.txRight}>
+              <Text
+                style={[
+                  styles.txAmount,
+                  { color: item.amount < 0 ? '#C0392B' : '#27AE60' },
+                ]}
+              >
+                {item.amount < 0 ? '-' : '+'}₹{Math.abs(item.amount)}
+              </Text>
+              <Text style={styles.txStatus}>{item.status}</Text>
+            </View>
+          </TouchableOpacity>
+        )}
+      />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  headerImage: {
-    color: '#808080',
-    bottom: -90,
-    left: -35,
-    position: 'absolute',
+  container: { flex: 1, backgroundColor: '#F5F6FA', padding: 16 },
+  search: {
+    backgroundColor: '#FFF',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#DDD',
   },
-  titleContainer: {
+  txRow: {
     flexDirection: 'row',
-    gap: 8,
+    justifyContent: 'space-between',
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EEE',
   },
+  txName: { fontSize: 15, fontWeight: '500' },
+  txDate: { fontSize: 12, color: '#7F8C8D', marginTop: 2 },
+  txRight: { alignItems: 'flex-end' },
+  txAmount: { fontSize: 15, fontWeight: '600' },
+  txStatus: { fontSize: 11, color: '#7F8C8D', marginTop: 2 },
 });

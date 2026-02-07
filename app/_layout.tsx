@@ -4,10 +4,10 @@ import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { DataCollector } from '@/services/DataCollector';
 import { AuthProvider, useAuth } from './AuthContext';
 import { useEffect } from 'react';
 import { behavioralService } from '@/services/BehavioralService';
+import { BehavioralProvider } from '@/services/BehavioralContext';
 
 function RootLayoutNav() {
   const colorScheme = useColorScheme();
@@ -15,7 +15,7 @@ function RootLayoutNav() {
 
   useEffect(() => {
     if (isLoggedIn) {
-      //behavioralService.start();
+      behavioralService.start();
     } else {
       behavioralService.stop();
     }
@@ -26,7 +26,12 @@ function RootLayoutNav() {
       <Stack>
         {isLoggedIn ? (
           // User is logged in - show all tabs
-          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <BehavioralProvider>
+            <Stack.Screen name="(tabs)" options={{ 
+              headerShown: true,
+              headerTitle: 'Bank',
+            }} />
+          </BehavioralProvider>
         ) : (
           // User is not logged in - show only login tab
           <Stack.Screen
@@ -37,6 +42,14 @@ function RootLayoutNav() {
           />
         )}
         <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
+        <Stack.Screen
+          name="transaction/[id]"
+          options={{
+            presentation: 'modal',
+            headerTitle: 'Transaction details',
+            headerShown: true,
+          }}
+        />
       </Stack>
       <StatusBar style="auto" />
     </ThemeProvider>
