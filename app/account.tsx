@@ -1,18 +1,21 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { useBehavioralCollector } from '@/services/BehavioralContext';
-
-const collector = useBehavioralCollector();
+import { useRef } from 'react';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 export default function AccountScreen() {
+  const collector = useBehavioralCollector();
+  const lastY = useRef(0);
   return (
-    <ScrollView 
-      style={styles.container} 
+    <ScrollView
+      style={styles.container}
       contentContainerStyle={styles.content}
       scrollEventThrottle={16}
-      onScroll={e =>
-        collector?.recordScroll(e.nativeEvent.contentOffset.y)
-      }
+      onScroll={(e) => {
+        const y = e.nativeEvent.contentOffset.y;
+        const dy = y - lastY.current;
+        lastY.current = y;
+        collector?.recordScroll(dy);
+      }}
     >
       <View style={styles.card}>
         <Text style={styles.name}>Venkat</Text>

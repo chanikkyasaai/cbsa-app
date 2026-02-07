@@ -1,13 +1,12 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity } from 'react-native';
 import { useBehavioralCollector } from '@/services/BehavioralContext';
-
-const collector = useBehavioralCollector();
+import { useState } from 'react';
+import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 export default function PayScreen() {
   const [step, setStep] = useState<1 | 2>(1);
   const [recipient, setRecipient] = useState('');
   const [amount, setAmount] = useState('');
+  const collector = useBehavioralCollector();
 
   return (
     <View style={styles.container}>
@@ -49,18 +48,14 @@ export default function PayScreen() {
       <TouchableOpacity
         style={styles.button}
         onPress={() => step === 1 ? setStep(2) : null}
-        onPressIn={e =>
-          collector?.recordTouchStart(
-            e.nativeEvent.pageX,
-            e.nativeEvent.pageY
-          )
-        }
-        onPressOut={e =>
-          collector?.recordTouchEnd(
-            e.nativeEvent.pageX,
-            e.nativeEvent.pageY
-          )
-        }
+        onPressIn={(e) => {
+          const { pageX, pageY, force } = e.nativeEvent;
+          collector?.recordTouchStart(pageX, pageY, force ?? 0);
+        }}
+        onPressOut={(e) => {
+          const { pageX, pageY, force } = e.nativeEvent;
+          collector?.recordTouchEnd(pageX, pageY, force ?? 0);
+        }}
       >
         <Text style={styles.buttonText}>
           {step === 1 ? 'NEXT' : 'PAY'}

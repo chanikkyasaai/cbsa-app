@@ -1,15 +1,14 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert } from 'react-native';
-import { router } from 'expo-router';
 import { useBehavioralCollector } from '@/services/BehavioralContext';
-
-const collector = useBehavioralCollector();
+import { router } from 'expo-router';
+import { useState } from 'react';
+import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 export default function ChangePinScreen() {
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [oldPin, setOldPin] = useState('');
   const [newPin, setNewPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
+  const collector = useBehavioralCollector();
 
   const handleNext = () => {
     if (step === 1) {

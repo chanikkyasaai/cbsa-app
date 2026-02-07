@@ -1,10 +1,7 @@
-import React, { useState, useMemo } from 'react';
-import { View, Text, StyleSheet, TextInput, FlatList, TouchableOpacity } from 'react-native';
 import { useBehavioralCollector } from '@/services/BehavioralContext';
 import { router } from 'expo-router';
-
-
-const collector = useBehavioralCollector();
+import { useMemo, useState } from 'react';
+import { FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 const TRANSACTIONS = [
   { id: '1', name: 'Amazon', amount: -1299, date: 'Today, 14:32', status: 'Completed' },
@@ -16,6 +13,7 @@ const TRANSACTIONS = [
 
 export default function ActivityScreen() {
   const [query, setQuery] = useState('');
+  const collector = useBehavioralCollector();
 
   const filtered = useMemo(() => {
     if (!query) return TRANSACTIONS;
@@ -44,18 +42,14 @@ export default function ActivityScreen() {
           <TouchableOpacity
             style={styles.txRow}
             onPress={() => router.push('/transaction/1')}
-            onPressIn={e =>
-              collector?.recordTouchStart(
-                e.nativeEvent.pageX,
-                e.nativeEvent.pageY
-              )
-            }
-            onPressOut={e =>
-              collector?.recordTouchEnd(
-                e.nativeEvent.pageX,
-                e.nativeEvent.pageY
-              )
-            }
+            onPressIn={(e) => {
+              const { pageX, pageY, force } = e.nativeEvent;
+              collector?.recordTouchStart(pageX, pageY, force ?? 0);
+            }}
+            onPressOut={(e) => {
+              const { pageX, pageY, force } = e.nativeEvent;
+              collector?.recordTouchEnd(pageX, pageY, force ?? 0);
+            }}
           >
             <View>
               <Text style={styles.txName}>{item.name}</Text>

@@ -51,8 +51,8 @@ export default function LoginScreen() {
 
       const collector = behavioralService.getCollector();
       if (collector && event?.nativeEvent) {
-        const { pageX, pageY } = event.nativeEvent;
-        collector.recordTouchStart(pageX, pageY);
+        const { pageX, pageY, force } = event.nativeEvent;
+        collector.recordTouchStart(pageX, pageY, force ?? 0);
         collector.recordKeystroke();
       }
     }

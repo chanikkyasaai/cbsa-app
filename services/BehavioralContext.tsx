@@ -12,12 +12,12 @@ export function BehavioralProvider({ children }: { children: React.ReactNode }) 
 
   if (!ref.current) {
     ref.current = new BehavioralCollector(payload => {
+      console.log("AAAAAAA")
       fetch('http://localhost:3001/behavior', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       }).catch(() => {
-        console.log(payload);
       });
     });
 

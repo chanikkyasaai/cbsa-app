@@ -7,7 +7,7 @@ class BehavioralService {
 
   start() {
     if (this.collector) return;
-
+/*
     this.backend = new BackendIntegrationService({
       baseURL: 'http://localhost:3001',
       retryAttempts: 3,
@@ -19,6 +19,7 @@ class BehavioralService {
     });
 
     this.collector.start();
+    */
   }
 
   stop() {

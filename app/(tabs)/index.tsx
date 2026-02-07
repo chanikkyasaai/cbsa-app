@@ -1,19 +1,17 @@
-import React, { useState } from 'react';
+import { useBehavioralCollector } from '@/services/BehavioralContext';
+import { router } from 'expo-router';
+import { useRef, useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
   FlatList,
-  TouchableOpacity,
-  ScrollView,
-  Pressable,
   GestureResponderEvent,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { useAuth } from '../AuthContext';
-import { router } from 'expo-router';
-import { useBehavioralCollector } from '@/services/BehavioralContext';
-
-const collector = useBehavioralCollector();
 
 type Transaction = {
   id: string;
@@ -34,31 +32,32 @@ const MOCK_TRANSACTIONS: Transaction[] = [
 export default function DashboardScreen() {
   const { isLoggedIn } = useAuth();
   const [showBalance, setShowBalance] = useState(true);
+  const collector = useBehavioralCollector();
+  const lastY = useRef(0);
 
   return (
     <ScrollView
       style={styles.container}
       contentContainerStyle={styles.content}
       scrollEventThrottle={16}
-      onScroll={e =>
-        collector?.recordScroll(e.nativeEvent.contentOffset.y)
-      }
+      onScroll={(e) => {
+        const y = e.nativeEvent.contentOffset.y;
+        const dy = y - lastY.current;
+        lastY.current = y;
+        collector?.recordScroll(dy, 'SCROLL_ACCOUNTS_LIST');
+      }}
     >
       {/* ================= Account Summary (Anchor) ================= */}
       <Pressable
         style={styles.accountCard}
-        onPressIn={e =>
-          collector?.recordTouchStart(
-            e.nativeEvent.pageX,
-            e.nativeEvent.pageY
-          )
-        }
-        onPressOut={e =>
-          collector?.recordTouchEnd(
-            e.nativeEvent.pageX,
-            e.nativeEvent.pageY
-          )
-        }
+        onPressIn={(e) => {
+          const { pageX, pageY, force } = e.nativeEvent;
+          collector?.recordTouchStart(pageX, pageY, force ?? 0, 'TOUCH_ACCOUNT_DETAILS');
+        }}
+        onPressOut={(e) => {
+          const { pageX, pageY, force } = e.nativeEvent;
+          collector?.recordTouchEnd(pageX, pageY, force ?? 0, 'TOUCH_ACCOUNT_DETAILS');
+        }}
         onPress={() => router.push('/account')}
       >
         <Text style={styles.accountType}>Savings Account</Text>
@@ -79,18 +78,14 @@ export default function DashboardScreen() {
         <PrimaryAction
           label="Pay / Transfer"
           onPress={() => router.push('/pay')}
-          onPressIn={e =>
-            collector?.recordTouchStart(
-              e.nativeEvent.pageX,
-              e.nativeEvent.pageY
-            )
-          }
-          onPressOut={e =>
-            collector?.recordTouchEnd(
-              e.nativeEvent.pageX,
-              e.nativeEvent.pageY
-            )
-          }
+          onPressIn={(e) => {
+            const { pageX, pageY, force } = e.nativeEvent;
+            collector?.recordTouchStart(pageX, pageY, force ?? 0, 'TOUCH_PAY_TRANSFER');
+          }}
+          onPressOut={(e) => {
+            const { pageX, pageY, force } = e.nativeEvent;
+            collector?.recordTouchEnd(pageX, pageY, force ?? 0, 'TOUCH_PAY_TRANSFER');
+          }}
         />
         <PrimaryAction label="Receive" />
         <PrimaryAction
@@ -100,18 +95,14 @@ export default function DashboardScreen() {
         <PrimaryAction
           label={showBalance ? 'Hide Balance' : 'Show Balance'}
           onPress={() => setShowBalance(!showBalance)}
-          onPressIn={e =>
-            collector?.recordTouchStart(
-              e.nativeEvent.pageX,
-              e.nativeEvent.pageY
-            )
-          }
-          onPressOut={e =>
-            collector?.recordTouchEnd(
-              e.nativeEvent.pageX,
-              e.nativeEvent.pageY
-            )
-          }
+          onPressIn={(e) => {
+            const { pageX, pageY, force } = e.nativeEvent;
+            collector?.recordTouchStart(pageX, pageY, force ?? 0, 'TOUCH_BALANCE_TOGGLE');
+          }}
+          onPressOut={(e) => {
+            const { pageX, pageY, force } = e.nativeEvent;
+            collector?.recordTouchEnd(pageX, pageY, force ?? 0, 'TOUCH_BALANCE_TOGGLE');
+          }}
         />
       </View>
 
@@ -126,18 +117,14 @@ export default function DashboardScreen() {
           <TouchableOpacity
             style={styles.txRow}
             onPress={() => router.push('/transaction/1')}
-            onPressIn={e =>
-              collector?.recordTouchStart(
-                e.nativeEvent.pageX,
-                e.nativeEvent.pageY
-              )
-            }
-            onPressOut={e =>
-              collector?.recordTouchEnd(
-                e.nativeEvent.pageX,
-                e.nativeEvent.pageY
-              )
-            }
+            onPressIn={(e) => {
+              const { pageX, pageY, force } = e.nativeEvent;
+              collector?.recordTouchStart(pageX, pageY, force ?? 0, 'TOUCH_TRANSACTION_ROW');
+            }}
+            onPressOut={(e) => {
+              const { pageX, pageY, force } = e.nativeEvent;
+              collector?.recordTouchEnd(pageX, pageY, force ?? 0, 'TOUCH_TRANSACTION_ROW');
+            }}
           >
             <View>
               <Text style={styles.txName}>{item.name}</Text>

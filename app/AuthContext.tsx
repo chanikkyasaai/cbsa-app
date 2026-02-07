@@ -12,6 +12,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
   const login = () => {
+    console.log("HELlO")
     setIsLoggedIn(true);
   };
 

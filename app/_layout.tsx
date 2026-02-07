@@ -4,10 +4,10 @@ import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { AuthProvider, useAuth } from './AuthContext';
-import { useEffect } from 'react';
-import { behavioralService } from '@/services/BehavioralService';
 import { BehavioralProvider } from '@/services/BehavioralContext';
+import { behavioralService } from '@/services/BehavioralService';
+import { useEffect } from 'react';
+import { AuthProvider, useAuth } from './AuthContext';
 
 function RootLayoutNav() {
   const colorScheme = useColorScheme();
@@ -21,17 +21,15 @@ function RootLayoutNav() {
     }
   }, [isLoggedIn]);
 
-  return (
+  let content = (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <Stack>
         {isLoggedIn ? (
           // User is logged in - show all tabs
-          <BehavioralProvider>
-            <Stack.Screen name="(tabs)" options={{ 
-              headerShown: true,
-              headerTitle: 'Bank',
-            }} />
-          </BehavioralProvider>
+          <Stack.Screen name="(tabs)" options={{
+            headerShown: true,
+            headerTitle: 'Bank',
+          }} />
         ) : (
           // User is not logged in - show only login tab
           <Stack.Screen
@@ -53,6 +51,13 @@ function RootLayoutNav() {
       </Stack>
       <StatusBar style="auto" />
     </ThemeProvider>
+  );
+
+  return (
+    isLoggedIn ?
+      <BehavioralProvider>
+        {content}
+      </BehavioralProvider> : content 
   );
 }
 
