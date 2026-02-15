@@ -1,18 +1,21 @@
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import React, { useEffect, useState } from 'react';
+import { behavioralService } from '@/services/BehavioralService';
+import { configService } from '@/services/ConfigService';
+import { wsService } from '@/services/WebSocketService';
+import { router } from 'expo-router';
+import { useEffect, useState } from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
 import { useAuth } from './AuthContext';
-import { behavioralService } from '@/services/BehavioralService';
-import { router } from 'expo-router';
 
 interface PINKeypadKey {
   value: string;
@@ -24,10 +27,26 @@ export default function LoginScreen() {
   const [pin, setPin] = useState('');
   const [keypadSequence, setKeypadSequence] = useState<PINKeypadKey[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [showIPConfig, setShowIPConfig] = useState(false);
+  const [backendIP, setBackendIP] = useState('localhost');
+  const [backendPort, setBackendPort] = useState('8000');
+  const [testingConnection, setTestingConnection] = useState(false);
 
   useEffect(() => {
     generateRandomizedKeypad();
+    loadSavedConfig();
   }, []);
+
+  // Load previously saved config
+  const loadSavedConfig = async () => {
+    try {
+      const config = await configService.getConfig();
+      setBackendIP(config.backendIP);
+      setBackendPort(config.backendPort.toString());
+    } catch (error) {
+      console.error('Failed to load config:', error);
+    }
+  };
 
   // Generate randomized keypad (0-9 in random order)
   const generateRandomizedKeypad = () => {
@@ -61,15 +80,59 @@ export default function LoginScreen() {
   // Handle backspace
   const handleBackspace = () => {
     setPin(prev => prev.slice(0, -1));
-
     behavioralService.getCollector()?.recordKeystroke();
   };
 
   // Handle clear
   const handleClear = () => {
     setPin('');
-
     behavioralService.getCollector()?.recordKeystroke();
+  };
+
+  // Save and test backend configuration
+  const handleSaveConfig = async () => {
+    try {
+      if (!backendIP.trim()) {
+        Alert.alert('Error', 'Please enter a backend IP address');
+        return;
+      }
+
+      const port = parseInt(backendPort, 10);
+      if (isNaN(port)) {
+        Alert.alert('Error', 'Port must be a valid number');
+        return;
+      }
+
+      setTestingConnection(true);
+
+      // Save config
+      await configService.setConfig({
+        backendIP: backendIP.trim(),
+        backendPort: port,
+      });
+
+      // Update WebSocket service URL
+      await wsService.updateURL();
+
+      // Test connection
+      const isConnected = await configService.testConnection();
+
+      setTestingConnection(false);
+
+      if (isConnected) {
+        Alert.alert('Success', 'Backend connection verified!');
+        setShowIPConfig(false);
+      } else {
+        Alert.alert(
+          'Warning',
+          'Configuration saved, but backend is not responding.\nMake sure your backend is running at the specified address.',
+          [{ text: 'OK', onPress: () => setShowIPConfig(false) }]
+        );
+      }
+    } catch (error) {
+      setTestingConnection(false);
+      Alert.alert('Error', `Failed to save configuration: ${error}`);
+    }
   };
 
   const handleProceed = async () => {
@@ -96,6 +159,72 @@ export default function LoginScreen() {
   };
 
   const getKeypadRow = (start: number) => keypadSequence.slice(start, start + 3);
+
+  // IP Configuration UI
+  if (showIPConfig) {
+    return (
+      <ThemedView style={styles.container}>
+        <View style={styles.mainContent}>
+          <View style={styles.headerContainer}>
+            <ThemedText style={styles.title}>Backend Configuration</ThemedText>
+          </View>
+
+          <View style={styles.configCard}>
+            <Text style={styles.configLabel}>Backend IP Address</Text>
+            <TextInput
+              style={styles.configInput}
+              placeholder="192.168.1.100"
+              value={backendIP}
+              onChangeText={setBackendIP}
+              editable={!testingConnection}
+              placeholderTextColor="#999"
+            />
+
+            <Text style={styles.configLabel}>Port</Text>
+            <TextInput
+              style={styles.configInput}
+              placeholder="8000"
+              value={backendPort}
+              onChangeText={setBackendPort}
+              keyboardType="numeric"
+              editable={!testingConnection}
+              placeholderTextColor="#999"
+            />
+
+            <View style={styles.configInfo}>
+              <Text style={styles.configInfoText}>
+                WebSocket URL:{'\n'}
+                <Text style={styles.configInfoBold}>
+                  ws://{backendIP}:{backendPort}/ws/behaviour
+                </Text>
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              style={[
+                styles.configButton,
+                testingConnection && styles.configButtonDisabled,
+              ]}
+              onPress={handleSaveConfig}
+              disabled={testingConnection}
+            >
+              <Text style={styles.configButtonText}>
+                {testingConnection ? 'Testing...' : 'Save & Test'}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.configButtonSecondary}
+              onPress={() => setShowIPConfig(false)}
+              disabled={testingConnection}
+            >
+              <Text style={styles.configButtonSecondaryText}>Back</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </ThemedView>
+    );
+  }
 
   return (
     <KeyboardAvoidingView
@@ -183,18 +312,27 @@ export default function LoginScreen() {
             </View>
           </View>
 
-          <TouchableOpacity
-            style={[
-              styles.proceedButton,
-              { opacity: isLoading || pin.length !== 4 ? 0.5 : 1 },
-            ]}
-            onPress={handleProceed}
-            disabled={isLoading || pin.length !== 4}
-          >
-            <Text style={styles.proceedButtonText}>
-              {isLoading ? 'Processing...' : 'PROCEED'}
-            </Text>
-          </TouchableOpacity>
+          <View style={styles.buttonsContainer}>
+            <TouchableOpacity
+              style={styles.configAccessButton}
+              onPress={() => setShowIPConfig(true)}
+            >
+              <Text style={styles.configAccessButtonText}>⚙️ Backend Config</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.proceedButton,
+                { opacity: isLoading || pin.length !== 4 ? 0.5 : 1 },
+              ]}
+              onPress={handleProceed}
+              disabled={isLoading || pin.length !== 4}
+            >
+              <Text style={styles.proceedButtonText}>
+                {isLoading ? 'Processing...' : 'PROCEED'}
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </ThemedView>
     </KeyboardAvoidingView>
@@ -285,5 +423,100 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#FFFFFF',
     letterSpacing: 0.8,
+  },
+  buttonsContainer: {
+    flexDirection: 'column',
+    width: '100%',
+    maxWidth: 320,
+    gap: 12,
+    marginTop: 20,
+  },
+  configAccessButton: {
+    paddingVertical: 12,
+    backgroundColor: '#8E8E93',
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  configAccessButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
+  },
+  configCard: {
+    backgroundColor: '#D5D5D8',
+    borderRadius: 12,
+    padding: 20,
+    marginBottom: 20,
+  },
+  configLabel: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#5B5B63',
+    marginBottom: 8,
+    marginTop: 12,
+  },
+  configInput: {
+    borderWidth: 1,
+    borderColor: '#BFBFBF',
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    fontSize: 14,
+    backgroundColor: '#FFFFFF',
+    color: '#2D3436',
+  },
+  configInfo: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    padding: 12,
+    marginTop: 16,
+    borderWidth: 1,
+    borderColor: '#BFBFBF',
+  },
+  configInfoText: {
+    fontSize: 12,
+    color: '#5B5B63',
+    marginBottom: 4,
+  },
+  configInfoBold: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#2D3436',
+  },
+  configButton: {
+    marginTop: 16,
+    paddingVertical: 12,
+    backgroundColor: '#2D3436',
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  configButtonDisabled: {
+    backgroundColor: '#BFBFBF',
+    opacity: 0.6,
+  },
+  configButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
+  },
+  configButtonSecondary: {
+    marginTop: 12,
+    paddingVertical: 12,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#BFBFBF',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  configButtonSecondaryText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#5B5B63',
+    letterSpacing: 0.5,
   },
 });

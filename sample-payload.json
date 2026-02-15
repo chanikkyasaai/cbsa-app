@@ -1,0 +1,49 @@
+{
+  "payload": {
+    "timestamp": 1739577600000,
+    "nonce": "a7b3c9d2e5f8",
+    "vector": [
+      0.342, 0.678, 0.521, 0.891, 0.234, 0.765,
+      0.123, 0.456, 0.789, 0.234, 0.567, 0.890,
+      0.100, 0.850, 0.920, 1.000, 0.450, 0.230,
+      0.678, 0.345, 0.901, 0.234, 0.567, 0.890,
+      0.432, 0.765, 0.098, 0.321, 0.654, 0.987,
+      0.543, 0.876, 0.210, 0.543, 0.876, 0.210,
+      0.654, 0.987, 0.321, 0.654, 0.123, 0.456,
+      0.789, 0.012, 0.345, 0.678, 0.901, 0.234
+    ],
+    "eventType": "TOUCH_ACCOUNT_DETAILS",
+    "deviceInfo": {
+      "deviceId": "SM-G998B",
+      "brand": "samsung",
+      "manufacturer": "Samsung",
+      "modelName": "Galaxy S21 Ultra 5G",
+      "modelId": "SM-G998B",
+      "designName": "r8q",
+      "productName": "r8qxxx",
+      "deviceYearClass": 2021,
+      "totalMemory": 12884901888,
+      "osName": "Android",
+      "osVersion": "14",
+      "osBuildId": "UP1A.231005.007",
+      "platformApiLevel": 34,
+      "deviceType": 1,
+      "isDevice": true,
+      "isRooted": false,
+      "networkType": "CELLULAR",
+      "networkState": "connected",
+      "isInternetReachable": true,
+      "ipAddress": "192.168.1.42",
+      "carrier": "Jio",
+      "isoCountryCode": "IN",
+      "mobileCountryCode": "404",
+      "mobileNetworkCode": "45",
+      "allowsVoip": true,
+      "latitude": 12.9716,
+      "longitude": 77.5946,
+      "locationAccuracy": 20.5,
+      "locationTimestamp": 1739577590000
+    }
+  },
+  "signature": "3045022100d5f8a9b2c3e4f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f502201a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2"
+}

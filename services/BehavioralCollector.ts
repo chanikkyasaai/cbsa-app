@@ -1,6 +1,10 @@
 import * as Battery from "expo-battery";
+import * as Cellular from "expo-cellular";
+import * as Device from "expo-device";
+import * as Location from "expo-location";
+import * as Network from "expo-network";
 import { Accelerometer, Gyroscope } from "expo-sensors";
-import { AppState, Dimensions } from "react-native";
+import { AppState, Dimensions, Platform } from "react-native";
 import { SigningService } from "./SigningService";
 
 type Vec3 = { x: number; y: number; z: number };
@@ -27,12 +31,51 @@ type KeystrokeEvent = {
   eventType?: string;
 };
 
+type DeviceInfo = {
+  deviceId: string | null;
+  brand: string | null;
+  manufacturer: string | null;
+  modelName: string | null;
+  modelId: string | null;
+  designName: string | null;
+  productName: string | null;
+  deviceYearClass: number | null;
+  totalMemory: number | null;
+  osName: string | null;
+  osVersion: string | null;
+  osBuildId: string | null;
+  platformApiLevel: number | null;
+  deviceType: number | null;
+  isDevice: boolean;
+  isRooted: boolean;
+  
+  // Network info
+  networkType: string | null;
+  networkState: string | null;
+  isInternetReachable: boolean | null;
+  ipAddress: string | null;
+  
+  // Cellular info
+  carrier: string | null;
+  isoCountryCode: string | null;
+  mobileCountryCode: string | null;
+  mobileNetworkCode: string | null;
+  allowsVoip: boolean | null;
+  
+  // Location (coarse)
+  latitude: number | null;
+  longitude: number | null;
+  locationAccuracy: number | null;
+  locationTimestamp: number | null;
+};
+
 export type EmittedBehavioralPayload = {
   payload: {
     timestamp: number;
     nonce: string;
     vector: number[];
     eventType?: string;
+    deviceInfo: DeviceInfo;
   };
   signature: string;
 };
@@ -54,6 +97,7 @@ export class BehavioralCollector {
   private orientation: 0 | 1 = 0; // portrait=0 landscape=1
   private batteryLevel: number = 1; // 0..1
   private appState: 0 | 1 = 1; // foreground=1 background=0
+  private deviceInfo: DeviceInfo | null = null;
 
   // ───── WINDOWING ─────
   private windowMs = 10000; // 1 second window
@@ -136,6 +180,7 @@ export class BehavioralCollector {
 
   async start() {
     await SigningService.init();
+    await this.collectDeviceInfo();
     this.windowStartTs = Date.now();
     this.lastEmitTs = Date.now();
 
@@ -190,6 +235,7 @@ export class BehavioralCollector {
       nonce: cryptoRandom(),
       vector,
       eventType: this.lastEventType,
+      deviceInfo: this.deviceInfo || await this.collectDeviceInfo(),
     };
 
     console.log('Emitting payload with eventType:', this.lastEventType);
@@ -646,6 +692,168 @@ export class BehavioralCollector {
   }
 
   /* ───────────────────────── CONTEXT HELPERS ───────────────────────── */
+
+  private async collectDeviceInfo(): Promise<DeviceInfo> {
+    try {
+      // Device basic info
+      const deviceId = Device.modelId || null; // Use modelId as device identifier
+      const brand = Device.brand;
+      const manufacturer = Device.manufacturer;
+      const modelName = Device.modelName;
+      const modelId = Device.modelId;
+      const designName = Device.designName;
+      const productName = Device.productName;
+      const deviceYearClass = Device.deviceYearClass;
+      const totalMemory = Device.totalMemory;
+      const osName = Device.osName;
+      const osVersion = Device.osVersion;
+      const osBuildId = Device.osBuildId;
+      const platformApiLevel = Device.platformApiLevel;
+      const deviceType = Device.deviceType;
+      const isDevice = Device.isDevice;
+
+      // Check for root/jailbreak
+      let isRooted = false;
+      try {
+        if (Platform.OS === 'android') {
+          // Check for common root indicators
+          isRooted = await Device.isRootedExperimentalAsync();
+        } else if (Platform.OS === 'ios') {
+          // iOS jailbreak detection
+          isRooted = await Device.isRootedExperimentalAsync();
+        }
+      } catch {
+        isRooted = false;
+      }
+
+      // Network info
+      let networkType: string | null = null;
+      let networkState: string | null = null;
+      let isInternetReachable: boolean | null = null;
+      let ipAddress: string | null = null;
+
+      try {
+        const netState = await Network.getNetworkStateAsync();
+        networkType = netState.type || null;
+        networkState = netState.isConnected ? 'connected' : 'disconnected';
+        isInternetReachable = netState.isInternetReachable ?? null;
+        ipAddress = await Network.getIpAddressAsync();
+      } catch (e) {
+        console.warn('Network info error:', e);
+      }
+
+      // Cellular info
+      let carrier: string | null = null;
+      let isoCountryCode: string | null = null;
+      let mobileCountryCode: string | null = null;
+      let mobileNetworkCode: string | null = null;
+      let allowsVoip: boolean | null = null;
+
+      try {
+        carrier = await Cellular.getCarrierNameAsync();
+        isoCountryCode = await Cellular.getIsoCountryCodeAsync();
+        mobileCountryCode = await Cellular.getMobileCountryCodeAsync();
+        mobileNetworkCode = await Cellular.getMobileNetworkCodeAsync();
+        allowsVoip = await Cellular.allowsVoipAsync();
+      } catch (e) {
+        console.warn('Cellular info error:', e);
+      }
+
+      // Location (coarse)
+      let latitude: number | null = null;
+      let longitude: number | null = null;
+      let locationAccuracy: number | null = null;
+      let locationTimestamp: number | null = null;
+
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status === 'granted') {
+          const location = await Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.Balanced,
+          });
+          latitude = location.coords.latitude;
+          longitude = location.coords.longitude;
+          locationAccuracy = location.coords.accuracy;
+          locationTimestamp = location.timestamp;
+        }
+      } catch (e) {
+        console.warn('Location error:', e);
+      }
+
+      const deviceInfo: DeviceInfo = {
+        deviceId,
+        brand,
+        manufacturer,
+        modelName,
+        modelId,
+        designName,
+        productName,
+        deviceYearClass,
+        totalMemory,
+        osName,
+        osVersion,
+        osBuildId,
+        platformApiLevel,
+        deviceType,
+        isDevice,
+        isRooted,
+        networkType,
+        networkState,
+        isInternetReachable,
+        ipAddress,
+        carrier,
+        isoCountryCode,
+        mobileCountryCode,
+        mobileNetworkCode,
+        allowsVoip,
+        latitude,
+        longitude,
+        locationAccuracy,
+        locationTimestamp,
+      };
+
+      this.deviceInfo = deviceInfo;
+      return deviceInfo;
+    } catch (error) {
+      console.error('Error collecting device info:', error);
+      
+      // Return minimal device info on error
+      const fallbackInfo: DeviceInfo = {
+        deviceId: null,
+        brand: null,
+        manufacturer: null,
+        modelName: null,
+        modelId: null,
+        designName: null,
+        productName: null,
+        deviceYearClass: null,
+        totalMemory: null,
+        osName: Platform.OS,
+        osVersion: Platform.Version?.toString() || null,
+        osBuildId: null,
+        platformApiLevel: null,
+        deviceType: null,
+        isDevice: Device.isDevice,
+        isRooted: false,
+        networkType: null,
+        networkState: null,
+        isInternetReachable: null,
+        ipAddress: null,
+        carrier: null,
+        isoCountryCode: null,
+        mobileCountryCode: null,
+        mobileNetworkCode: null,
+        allowsVoip: null,
+        latitude: null,
+        longitude: null,
+        locationAccuracy: null,
+        locationTimestamp: null,
+      };
+      
+      this.deviceInfo = fallbackInfo;
+      return fallbackInfo;
+    }
+  }
 
   private updateOrientation() {
     const dim = Dimensions.get("window");

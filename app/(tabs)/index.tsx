@@ -1,10 +1,9 @@
 import { useBehavioralCollector } from '@/services/BehavioralContext';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { router } from 'expo-router';
 import { useRef, useState } from 'react';
 import {
-  FlatList,
-  GestureResponderEvent,
-  Pressable,
+  Dimensions,
   ScrollView,
   StyleSheet,
   Text,
@@ -13,156 +12,263 @@ import {
 } from 'react-native';
 import { useAuth } from '../AuthContext';
 
-type Transaction = {
+const { width } = Dimensions.get('window');
+
+type Service = {
   id: string;
   name: string;
-  amount: number;
-  date: string;
-  status: 'Completed' | 'Pending';
+  icon: keyof typeof MaterialIcons.glyphMap;
+  badge?: string;
 };
 
-const MOCK_TRANSACTIONS: Transaction[] = [
-  { id: '1', name: 'Amazon', amount: -1299, date: 'Today, 14:32', status: 'Completed' },
-  { id: '2', name: 'Rahul', amount: 5000, date: 'Yesterday, 09:10', status: 'Completed' },
-  { id: '3', name: 'Uber', amount: -240, date: 'Sep 12, 21:18', status: 'Completed' },
-  { id: '4', name: 'Netflix', amount: -499, date: 'Sep 10, 08:00', status: 'Pending' },
-  { id: '5', name: 'Swiggy', amount: -620, date: 'Sep 9, 20:45', status: 'Completed' },
+const SERVICES: Service[] = [
+  { id: '1', name: 'Fund transfer', icon: 'swap-horiz' },
+  { id: '2', name: 'Fixed/Systematic Deposit Plan', icon: 'savings' },
+  { id: '3', name: 'Periodic updation of KYC(Re-KYC)', icon: 'assignment' },
+  { id: '4', name: 'Forex', icon: 'currency-exchange', badge: 'NEW' },
+  { id: '5', name: 'Apply IPO', icon: 'trending-up' },
+  { id: '6', name: 'Digital loan', icon: 'description' },
+  { id: '7', name: 'Mutual funds', icon: 'pie-chart' },
+  { id: '8', name: 'Brands2You', icon: 'thumb-up' },
+  { id: '9', name: 'Healthcare Services', icon: 'favorite' },
+  { id: '10', name: 'Xplore the Globe', icon: 'card-giftcard' },
+  { id: '11', name: 'Credit score', icon: 'score', badge: 'Free' },
+  { id: '12', name: 'Mobile recharge', icon: 'smartphone' },
+  { id: '13', name: 'Flight booking', icon: 'flight' },
+  { id: '14', name: 'Bus booking', icon: 'directions-bus' },
+  { id: '15', name: 'Train booking', icon: 'train' },
+  { id: '16', name: 'Send money abroad', icon: 'language' },
 ];
 
 export default function DashboardScreen() {
   const { isLoggedIn } = useAuth();
-  const [showBalance, setShowBalance] = useState(true);
+  const [showBalance, setShowBalance] = useState(false);
+  const [selectedTab, setSelectedTab] = useState('Accounts');
+  const [trendingExpanded, setTrendingExpanded] = useState(true);
   const collector = useBehavioralCollector();
   const lastY = useRef(0);
 
+  const tabs = ['Accounts', 'Save', 'Invest', 'Borrow', 'Shop & pay'];
+
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={styles.content}
-      scrollEventThrottle={16}
-      onScroll={(e) => {
-        const y = e.nativeEvent.contentOffset.y;
-        const dy = y - lastY.current;
-        lastY.current = y;
-        collector?.recordScroll(dy, 'SCROLL_ACCOUNTS_LIST');
-      }}
-    >
-      {/* ================= Account Summary (Anchor) ================= */}
-      <Pressable
-        style={styles.accountCard}
-        onPressIn={(e) => {
-          const { pageX, pageY, force } = e.nativeEvent;
-          collector?.recordTouchStart(pageX, pageY, force ?? 0, 'TOUCH_ACCOUNT_DETAILS');
-        }}
-        onPressOut={(e) => {
-          const { pageX, pageY, force } = e.nativeEvent;
-          collector?.recordTouchEnd(pageX, pageY, force ?? 0, 'TOUCH_ACCOUNT_DETAILS');
-        }}
-        onPress={() => router.push('/account')}
-      >
-        <Text style={styles.accountType}>Savings Account</Text>
-
-        <Text style={styles.balanceLabel}>Available Balance</Text>
-        <Text style={styles.balanceValue}>
-          {isLoggedIn && showBalance ? '₹42,350.00' : '••••••'}
-        </Text>
-
-        <View style={styles.accountMeta}>
-          <Text style={styles.metaText}>A/C •••• 4821</Text>
-          <Text style={styles.metaText}>Updated just now</Text>
+    <View style={styles.container}>
+      {/* Header */}
+      <View style={styles.header}>
+        <View style={styles.logo}>
+          <Text style={styles.logoText}>B</Text>
+          <Text style={styles.logoSubtext}>bob world</Text>
         </View>
-      </Pressable>
-
-      {/* ================= Primary Actions (CTAs) ================= */}
-      <View style={styles.actionsGrid}>
-        <PrimaryAction
-          label="Pay / Transfer"
-          onPress={() => router.push('/pay')}
-          onPressIn={(e) => {
-            const { pageX, pageY, force } = e.nativeEvent;
-            collector?.recordTouchStart(pageX, pageY, force ?? 0, 'TOUCH_PAY_TRANSFER');
-          }}
-          onPressOut={(e) => {
-            const { pageX, pageY, force } = e.nativeEvent;
-            collector?.recordTouchEnd(pageX, pageY, force ?? 0, 'TOUCH_PAY_TRANSFER');
-          }}
-        />
-        <PrimaryAction label="Receive" />
-        <PrimaryAction
-          label="Change PIN"
-          onPress={() => router.push('/change-pin')}
-        />
-        <PrimaryAction
-          label={showBalance ? 'Hide Balance' : 'Show Balance'}
-          onPress={() => setShowBalance(!showBalance)}
-          onPressIn={(e) => {
-            const { pageX, pageY, force } = e.nativeEvent;
-            collector?.recordTouchStart(pageX, pageY, force ?? 0, 'TOUCH_BALANCE_TOGGLE');
-          }}
-          onPressOut={(e) => {
-            const { pageX, pageY, force } = e.nativeEvent;
-            collector?.recordTouchEnd(pageX, pageY, force ?? 0, 'TOUCH_BALANCE_TOGGLE');
-          }}
-        />
-      </View>
-
-      {/* ================= Transaction History ================= */}
-      <Text style={styles.sectionTitle}>Recent Transactions</Text>
-
-      <FlatList
-        data={MOCK_TRANSACTIONS}
-        keyExtractor={(item) => item.id}
-        scrollEnabled={false} // ScrollView owns scrolling (infinite feel)
-        renderItem={({ item }) => (
-          <TouchableOpacity
-            style={styles.txRow}
-            onPress={() => router.push('/transaction/1')}
+        <View style={styles.headerRight}>
+          <TouchableOpacity 
+            style={styles.iconButton}
             onPressIn={(e) => {
               const { pageX, pageY, force } = e.nativeEvent;
-              collector?.recordTouchStart(pageX, pageY, force ?? 0, 'TOUCH_TRANSACTION_ROW');
+              collector?.recordTouchStart(pageX, pageY, force ?? 0, 'TOUCH_SEARCH');
             }}
             onPressOut={(e) => {
               const { pageX, pageY, force } = e.nativeEvent;
-              collector?.recordTouchEnd(pageX, pageY, force ?? 0, 'TOUCH_TRANSACTION_ROW');
+              collector?.recordTouchEnd(pageX, pageY, force ?? 0, 'TOUCH_SEARCH');
             }}
           >
-            <View>
-              <Text style={styles.txName}>{item.name}</Text>
-              <Text style={styles.txDate}>{item.date}</Text>
-            </View>
+            <MaterialIcons name="search" size={24} color="#333" />
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.profileButton}
+            onPressIn={(e) => {
+              const { pageX, pageY, force } = e.nativeEvent;
+              collector?.recordTouchStart(pageX, pageY, force ?? 0, 'TOUCH_PROFILE');
+            }}
+            onPressOut={(e) => {
+              const { pageX, pageY, force } = e.nativeEvent;
+              collector?.recordTouchEnd(pageX, pageY, force ?? 0, 'TOUCH_PROFILE');
+            }}
+          >
+            <Text style={styles.profileText}>CV</Text>
+            <View style={styles.notificationDot} />
+          </TouchableOpacity>
+        </View>
+      </View>
 
-            <View style={styles.txRight}>
-              <Text
-                style={[
-                  styles.txAmount,
-                  { color: item.amount < 0 ? '#C0392B' : '#27AE60' },
-                ]}
-              >
-                {item.amount < 0 ? '-' : '+'}₹{Math.abs(item.amount)}
+      {/* Tab Navigation */}
+      <View style={styles.tabWrapper}>
+        <ScrollView 
+          horizontal 
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.tabContentContainer}
+        >
+          {tabs.map((tab) => (
+            <TouchableOpacity
+              key={tab}
+              style={[styles.tab, selectedTab === tab && styles.tabActive]}
+              onPress={() => setSelectedTab(tab)}
+              onPressIn={(e) => {
+                const { pageX, pageY, force } = e.nativeEvent;
+                collector?.recordTouchStart(pageX, pageY, force ?? 0, `TOUCH_TAB_${tab.toUpperCase()}`);
+              }}
+              onPressOut={(e) => {
+                const { pageX, pageY, force } = e.nativeEvent;
+                collector?.recordTouchEnd(pageX, pageY, force ?? 0, `TOUCH_TAB_${tab.toUpperCase()}`);
+              }}
+            >
+              <Text style={[styles.tabText, selectedTab === tab && styles.tabTextActive]}>
+                {tab}
               </Text>
-              <Text style={styles.txStatus}>{item.status}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </View>
+
+      <ScrollView
+        style={styles.content}
+        scrollEventThrottle={16}
+        showsVerticalScrollIndicator={false}
+        onScroll={(e) => {
+          const y = e.nativeEvent.contentOffset.y;
+          const dy = y - lastY.current;
+          lastY.current = y;
+          collector?.recordScroll(dy, 'SCROLL_DASHBOARD');
+        }}
+      >
+        {/* Balance Card */}
+        <TouchableOpacity
+          style={styles.balanceCard}
+          activeOpacity={0.9}
+          onPress={() => router.push('/account')}
+          onPressIn={(e) => {
+            const { pageX, pageY, force } = e.nativeEvent;
+            collector?.recordTouchStart(pageX, pageY, force ?? 0, 'TOUCH_BALANCE_CARD');
+          }}
+          onPressOut={(e) => {
+            const { pageX, pageY, force } = e.nativeEvent;
+            collector?.recordTouchEnd(pageX, pageY, force ?? 0, 'TOUCH_BALANCE_CARD');
+          }}
+        >
+          <Text style={styles.accountTitle}>Savings account - 2783</Text>
+          <View style={styles.balanceRow}>
+            <View>
+              <Text style={styles.balanceAmount}>
+                {showBalance ? '₹ 69,420' : '₹ X,XX,XXX'}
+              </Text>
+              <Text style={styles.balanceLabel}>Available balance</Text>
+            </View>
+            <TouchableOpacity 
+              style={styles.eyeButton}
+              onPress={() => setShowBalance(!showBalance)}
+              onPressIn={(e) => {
+                const { pageX, pageY, force } = e.nativeEvent;
+                collector?.recordTouchStart(pageX, pageY, force ?? 0, 'TOUCH_BALANCE_TOGGLE');
+              }}
+              onPressOut={(e) => {
+                const { pageX, pageY, force } = e.nativeEvent;
+                collector?.recordTouchEnd(pageX, pageY, force ?? 0, 'TOUCH_BALANCE_TOGGLE');
+              }}
+            >
+              <Text style={styles.eyeIcon}>👁️</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+
+        {/* Action Buttons */}
+        <View style={styles.actionButtons}>
+          <TouchableOpacity 
+            style={styles.pillButton}
+            onPress={() => router.push('/account')}
+            onPressIn={(e) => {
+              const { pageX, pageY, force } = e.nativeEvent;
+              collector?.recordTouchStart(pageX, pageY, force ?? 0, 'TOUCH_VIEW_ACCOUNTS');
+            }}
+            onPressOut={(e) => {
+              const { pageX, pageY, force } = e.nativeEvent;
+              collector?.recordTouchEnd(pageX, pageY, force ?? 0, 'TOUCH_VIEW_ACCOUNTS');
+            }}
+          >
+            <Text style={styles.pillButtonText}>View all accounts</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.pillButton}
+            onPress={() => router.push('/explore')}
+            onPressIn={(e) => {
+              const { pageX, pageY, force } = e.nativeEvent;
+              collector?.recordTouchStart(pageX, pageY, force ?? 0, 'TOUCH_TRANSACTION_HISTORY');
+            }}
+            onPressOut={(e) => {
+              const { pageX, pageY, force } = e.nativeEvent;
+              collector?.recordTouchEnd(pageX, pageY, force ?? 0, 'TOUCH_TRANSACTION_HISTORY');
+            }}
+          >
+            <Text style={styles.pillButtonText}>Transaction history</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* What's Trending Section */}
+        <View style={styles.trendingSection}>
+          <TouchableOpacity 
+            style={styles.trendingHeader}
+            onPress={() => setTrendingExpanded(!trendingExpanded)}
+            onPressIn={(e) => {
+              const { pageX, pageY, force } = e.nativeEvent;
+              collector?.recordTouchStart(pageX, pageY, force ?? 0, 'TOUCH_TRENDING_TOGGLE');
+            }}
+            onPressOut={(e) => {
+              const { pageX, pageY, force } = e.nativeEvent;
+              collector?.recordTouchEnd(pageX, pageY, force ?? 0, 'TOUCH_TRENDING_TOGGLE');
+            }}
+          >
+            <Text style={styles.trendingTitle}>What's trending</Text>
+            <View style={styles.trendingToggle}>
+              <Text style={styles.toggleIcon}>{trendingExpanded ? '🔼' : '🔽'}</Text>
             </View>
           </TouchableOpacity>
-        )}
-      />
-    </ScrollView>
+
+          {trendingExpanded && (
+            <View style={styles.servicesGrid}>
+              {SERVICES.map((service) => (
+                <ServiceCard 
+                  key={service.id} 
+                  service={service} 
+                  collector={collector}
+                />
+              ))}
+            </View>
+          )}
+        </View>
+      </ScrollView>
+    </View>
   );
 }
 
-function PrimaryAction({
-  label,
-  onPress,
-  onPressIn,
-  onPressOut,
-}: {
-  label: string;
-  onPress?: () => void;
-  onPressIn?: (e: GestureResponderEvent) => void;
-  onPressOut?: (e: GestureResponderEvent) => void;
+function ServiceCard({ 
+  service, 
+  collector 
+}: { 
+  service: Service;
+  collector: any;
 }) {
   return (
-    <TouchableOpacity style={styles.actionButton} onPress={onPress} onPressIn={onPressIn} onPressOut={onPressOut}>
-      <Text style={styles.actionText}>{label}</Text>
+    <TouchableOpacity 
+      style={styles.serviceCard}
+      onPressIn={(e) => {
+        const { pageX, pageY, force } = e.nativeEvent;
+        collector?.recordTouchStart(pageX, pageY, force ?? 0, `TOUCH_SERVICE_${service.id}`);
+      }}
+      onPressOut={(e) => {
+        const { pageX, pageY, force } = e.nativeEvent;
+        collector?.recordTouchEnd(pageX, pageY, force ?? 0, `TOUCH_SERVICE_${service.id}`);
+      }}
+    >
+      <View style={styles.serviceIconContainer}>
+        <MaterialIcons name={service.icon} size={24} color="#5C6BC0" />
+        {service.badge && (
+          <View style={[
+            styles.serviceBadge,
+            service.badge === 'NEW' && styles.badgeNew,
+            service.badge === 'Free' && styles.badgeFree
+          ]}>
+            <Text style={styles.badgeText}>{service.badge}</Text>
+          </View>
+        )}
+      </View>
+      <Text style={styles.serviceName}>{service.name}</Text>
     </TouchableOpacity>
   );
 }
@@ -170,98 +276,266 @@ function PrimaryAction({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F6FA',
+    backgroundColor: '#E8EAF6',
   },
-  content: {
-    padding: 16,
-    paddingBottom: 32,
-  },
-
-  /* ===== Account Summary ===== */
-  accountCard: {
-    backgroundColor: '#2D3436',
-    borderRadius: 14,
-    padding: 20,
-    marginBottom: 20,
-  },
-  accountType: {
-    color: '#B2BEC3',
-    fontSize: 14,
-    marginBottom: 8,
-  },
-  balanceLabel: {
-    color: '#B2BEC3',
-    fontSize: 13,
-  },
-  balanceValue: {
-    color: '#FFFFFF',
-    fontSize: 30,
-    fontWeight: '600',
-    marginVertical: 6,
-  },
-  accountMeta: {
+  
+  // Header
+  header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 8,
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#FFFFFF',
+    zIndex: 10,
   },
-  metaText: {
-    color: '#DCDDE1',
-    fontSize: 12,
-  },
-
-  /* ===== Actions ===== */
-  actionsGrid: {
+  logo: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginBottom: 24,
+    alignItems: 'center',
+    gap: 4,
+  },
+  logoText: {
+    fontSize: 24,
+    fontWeight: '700',
+    backgroundColor: '#FF5722',
+    width: 32,
+    height: 32,
+    textAlign: 'center',
+    lineHeight: 32,
+    borderRadius: 4,
+    color: '#FFFFFF',
+  },
+  logoSubtext: {
+    fontSize: 12,
+    color: '#FF5722',
+    fontWeight: '600',
+  },
+  headerRight: {
+    flexDirection: 'row',
     gap: 12,
   },
-  actionButton: {
-    width: '48%',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    paddingVertical: 18,
-    alignItems: 'center',
-    elevation: 2,
+  iconButton: {
+    padding: 8,
   },
-  actionText: {
+  iconText: {
+    fontSize: 20,
+  },
+  profileButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 2,
+    borderColor: '#5C6BC0',
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
+  },
+  profileText: {
     fontSize: 14,
-    fontWeight: '500',
-    color: '#2D3436',
+    fontWeight: '600',
+    color: '#5C6BC0',
+  },
+  notificationDot: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#FF5722',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
   },
 
-  /* ===== Transactions ===== */
-  sectionTitle: {
+  // Tabs
+  tabWrapper: {
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E0E0E0',
+    zIndex: 10,
+  },
+  tabContentContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  tab: {
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    marginRight: 12,
+  },
+  tabActive: {
+    borderBottomWidth: 3,
+    borderBottomColor: '#FF5722',
+  },
+  tabText: {
+    fontSize: 13,
+    color: '#757575',
+    fontWeight: '500',
+  },
+  tabTextActive: {
+    color: '#212121',
+    fontWeight: '600',
+  },
+
+  // Content
+  content: {
+    flex: 1,
+    paddingHorizontal: 16,
+  },
+
+  // Balance Card
+  balanceCard: {
+    marginTop: 16,
+    padding: 20,
+    borderRadius: 16,
+    backgroundColor: '#FF7043',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  accountTitle: {
+    color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
     marginBottom: 12,
   },
-  txRow: {
+  balanceRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: '#EEE',
+    alignItems: 'center',
   },
-  txName: {
-    fontSize: 15,
+  balanceAmount: {
+    color: '#FFFFFF',
+    fontSize: 28,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  balanceLabel: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    opacity: 0.9,
+  },
+  eyeButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(92, 107, 192, 0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  eyeIcon: {
+    fontSize: 20,
+  },
+
+  // Action Buttons
+  actionButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 16,
+    marginBottom: 16,
+  },
+  pillButton: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: '#90A4AE',
+    backgroundColor: 'transparent',
+    alignItems: 'center',
+  },
+  pillButtonText: {
+    color: '#546E7A',
+    fontSize: 13,
     fontWeight: '500',
   },
-  txDate: {
-    fontSize: 12,
-    color: '#7F8C8D',
-    marginTop: 2,
+
+  // Trending Section
+  trendingSection: {
+    marginTop: 8,
+    marginBottom: 24,
   },
-  txRight: {
-    alignItems: 'flex-end',
+  trendingHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
   },
-  txAmount: {
-    fontSize: 15,
-    fontWeight: '600',
+  trendingTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#212121',
   },
-  txStatus: {
+  trendingToggle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#5C6BC0',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  toggleIcon: {
+    fontSize: 16,
+  },
+
+  // Services Grid
+  servicesGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginTop: 8,
+  },
+  serviceCard: {
+    width: (width - 52) / 4, // 4 columns with gaps
+    alignItems: 'center',
+    paddingVertical: 12,
+  },
+  serviceIconContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+    position: 'relative',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  serviceIcon: {
+    fontSize: 28,
+  },
+  serviceBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  badgeNew: {
+    backgroundColor: '#FF5252',
+  },
+  badgeFree: {
+    backgroundColor: '#4CAF50',
+  },
+  badgeText: {
+    color: '#FFFFFF',
+    fontSize: 9,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+  },
+  serviceName: {
     fontSize: 11,
-    color: '#7F8C8D',
-    marginTop: 2,
+    color: '#546E7A',
+    textAlign: 'center',
+    lineHeight: 14,
   },
 });

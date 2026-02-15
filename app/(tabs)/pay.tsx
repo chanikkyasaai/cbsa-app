@@ -21,7 +21,7 @@ export default function PayScreen() {
             style={styles.input}
             value={recipient}
             onChangeText={(s) => {
-              collector?.recordKeystroke()
+              collector?.recordKeystroke("PAY_RECIPIENT")
               setRecipient(s)
             }}
           />
@@ -31,7 +31,7 @@ export default function PayScreen() {
             style={styles.input}
             value={amount}
             onChangeText={(s) => {
-              collector?.recordKeystroke()
+              collector?.recordKeystroke("PAY_AMOUNT")
               setAmount(s)
             }}
           />
@@ -50,11 +50,11 @@ export default function PayScreen() {
         onPress={() => step === 1 ? setStep(2) : null}
         onPressIn={(e) => {
           const { pageX, pageY, force } = e.nativeEvent;
-          collector?.recordTouchStart(pageX, pageY, force ?? 0);
+          collector?.recordTouchStart(pageX, pageY, force ?? 0, "PAY_BUTTON");
         }}
         onPressOut={(e) => {
           const { pageX, pageY, force } = e.nativeEvent;
-          collector?.recordTouchEnd(pageX, pageY, force ?? 0);
+          collector?.recordTouchEnd(pageX, pageY, force ?? 0, "PAY_BUTTON");
         }}
       >
         <Text style={styles.buttonText}>
