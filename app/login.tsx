@@ -148,8 +148,8 @@ export default function LoginScreen() {
       await new Promise(res => setTimeout(res, 800));
 
       Alert.alert('Success', 'Login successful!');
-      login(); // triggers isLoggedIn = true
-      router.replace('/(tabs)');
+      login(); // triggers isLoggedIn = true, layout will handle navigation
+      // No need to manually navigate - the root layout will automatically show (tabs)
     } catch (error) {
       Alert.alert('Error', 'Login failed. Please try again.');
       setPin('');
