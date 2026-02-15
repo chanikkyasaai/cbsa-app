@@ -1,442 +1,541 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { StyleSheet, Text, View, ScrollView, Platform, NativeSyntheticEvent, NativeScrollEvent, GestureResponderEvent, TextInput, Dimensions } from 'react-native';
-import { Accelerometer, Gyroscope } from 'expo-sensors';
-import * as Device from 'expo-device';
-import * as Battery from 'expo-battery';
+import { useBehavioralCollector } from '@/services/BehavioralContext';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import { router } from 'expo-router';
+import { useRef, useState } from 'react';
+import {
+  Dimensions,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { useAuth } from '../AuthContext';
 
-// Helper functions for statistics
-const calculateMean = (data: number[]) => data.reduce((a, b) => a + b, 0) / (data.length || 1);
-const calculateVariance = (data: number[], mean: number) => {
-  if (data.length === 0) return 0;
-  return data.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / data.length;
-};
-const calculateMagnitude = (x: number, y: number, z: number) => Math.sqrt(x * x + y * y + z * z);
-const calculateEntropy = (data: number[]) => {
-  if (data.length === 0) return 0;
-  const histogram: Record<string, number> = {};
-  data.forEach(val => {
-    const bin = Math.floor(val * 2); // Binning (0.5 granularity)
-    histogram[bin] = (histogram[bin] || 0) + 1;
-  });
-  let entropy = 0;
-  Object.values(histogram).forEach(count => {
-    const p = count / data.length;
-    entropy -= p * Math.log2(p);
-  });
-  return entropy;
+const { width } = Dimensions.get('window');
+
+type Service = {
+  id: string;
+  name: string;
+  icon: keyof typeof MaterialIcons.glyphMap;
+  badge?: string;
 };
 
-export default function BehavioralDataScreen() {
-  // Sensor Data State
-  const [accelData, setAccelData] = useState({ x: 0, y: 0, z: 0 });
-  const [gyroData, setGyroData] = useState({ x: 0, y: 0, z: 0 });
+const SERVICES: Service[] = [
+  { id: '1', name: 'Fund transfer', icon: 'swap-horiz' },
+  { id: '2', name: 'Fixed/Systematic Deposit Plan', icon: 'savings' },
+  { id: '3', name: 'Periodic updation of KYC(Re-KYC)', icon: 'assignment' },
+  { id: '4', name: 'Forex', icon: 'currency-exchange', badge: 'NEW' },
+  { id: '5', name: 'Apply IPO', icon: 'trending-up' },
+  { id: '6', name: 'Digital loan', icon: 'description' },
+  { id: '7', name: 'Mutual funds', icon: 'pie-chart' },
+  { id: '8', name: 'Brands2You', icon: 'thumb-up' },
+  { id: '9', name: 'Healthcare Services', icon: 'favorite' },
+  { id: '10', name: 'Xplore the Globe', icon: 'card-giftcard' },
+  { id: '11', name: 'Credit score', icon: 'score', badge: 'Free' },
+  { id: '12', name: 'Mobile recharge', icon: 'smartphone' },
+  { id: '13', name: 'Flight booking', icon: 'flight' },
+  { id: '14', name: 'Bus booking', icon: 'directions-bus' },
+  { id: '15', name: 'Train booking', icon: 'train' },
+  { id: '16', name: 'Send money abroad', icon: 'language' },
+];
 
-  // Touch Data State
-  const [touchData, setTouchData] = useState({ x: 0, y: 0, count: 0 });
+export default function DashboardScreen() {
+  const { isLoggedIn } = useAuth();
+  const [showBalance, setShowBalance] = useState(false);
+  const [selectedTab, setSelectedTab] = useState('Accounts');
+  const [trendingExpanded, setTrendingExpanded] = useState(true);
+  const collector = useBehavioralCollector();
+  const lastY = useRef(0);
 
-  // Device & Battery State
-  const [batteryLevel, setBatteryLevel] = useState<number | null>(null);
-  const [deviceInfo, setDeviceInfo] = useState({
-    model: '',
-    osVersion: '',
-  });
-
-  // Derived Features State
-  const [touchFeatures, setTouchFeatures] = useState({
-    dwellTime: 0,
-    velocity: 0,
-    direction: 0,
-    pressure: 0,
-  });
-  const [scrollFeatures, setScrollFeatures] = useState({
-    velocity: 0,
-    acceleration: 0,
-    direction: 'None',
-  });
-  const [accelFeatures, setAccelFeatures] = useState({
-    magnitude: 0,
-    mean: 0,
-    variance: 0,
-    entropy: 0,
-  });
-  const [gyroFeatures, setGyroFeatures] = useState({
-    magnitude: 0,
-    mean: 0,
-    variance: 0,
-    entropy: 0,
-  });
-  const [typingFeatures, setTypingFeatures] = useState({
-    interKeyLatency: 0,
-    typingSpeed: 0, // chars per minute approx
-  });
-  const [contextFeatures, setContextFeatures] = useState({
-    orientation: 'Portrait',
-    timeOfDay: new Date().toLocaleTimeString(),
-  });
-
-  // Buffers for sliding windows
-  const accelBuffer = useRef<number[]>([]);
-  const gyroBuffer = useRef<number[]>([]);
-  const MAX_BUFFER_SIZE = 20; // ~2 seconds at 100ms interval
-
-  // Interaction Refs
-  const touchStartRef = useRef<{ time: number; x: number; y: number } | null>(null);
-  const lastScrollRef = useRef<{ time: number; y: number; velocity: number } | null>(null);
-  const lastKeyTimeRef = useRef<number>(0);
-
-  // Sensors Subscription
-  useEffect(() => {
-    Accelerometer.setUpdateInterval(100);
-    Gyroscope.setUpdateInterval(100);
-
-    const accelSubscription = Accelerometer.addListener(data => {
-      setAccelData(data);
-      
-      // Derived Accel Features
-      const mag = calculateMagnitude(data.x, data.y, data.z);
-      accelBuffer.current.push(mag);
-      if (accelBuffer.current.length > MAX_BUFFER_SIZE) accelBuffer.current.shift();
-      
-      const mean = calculateMean(accelBuffer.current);
-      const variance = calculateVariance(accelBuffer.current, mean);
-      const entropy = calculateEntropy(accelBuffer.current);
-      
-      setAccelFeatures({ magnitude: mag, mean, variance, entropy });
-    });
-
-    const gyroSubscription = Gyroscope.addListener(data => {
-      setGyroData(data);
-
-      // Derived Gyro Features
-      const mag = calculateMagnitude(data.x, data.y, data.z);
-      gyroBuffer.current.push(mag);
-      if (gyroBuffer.current.length > MAX_BUFFER_SIZE) gyroBuffer.current.shift();
-
-      const mean = calculateMean(gyroBuffer.current);
-      const variance = calculateVariance(gyroBuffer.current, mean);
-      const entropy = calculateEntropy(gyroBuffer.current);
-
-      setGyroFeatures({ magnitude: mag, mean, variance, entropy });
-    });
-
-    // Context: Orientation & Time
-    const updateContext = () => {
-      const dim = Dimensions.get('window');
-      setContextFeatures({
-        orientation: dim.height >= dim.width ? 'Portrait' : 'Landscape',
-        timeOfDay: new Date().toLocaleTimeString(),
-      });
-    };
-    
-    const dimSubscription = Dimensions.addEventListener('change', updateContext);
-    const timeInterval = setInterval(updateContext, 1000);
-
-    return () => {
-      accelSubscription && accelSubscription.remove();
-      gyroSubscription && gyroSubscription.remove();
-      dimSubscription && dimSubscription.remove();
-      clearInterval(timeInterval);
-    };
-  }, []);
-
-  // Battery & Device Info
-  useEffect(() => {
-    const fetchDeviceData = async () => {
-      let level = null;
-      try {
-        level = await Battery.getBatteryLevelAsync();
-      } catch (e) {
-        console.log('Battery level not available');
-      }
-      setBatteryLevel(level);
-
-      setDeviceInfo({
-        model: Device.modelName || 'Unknown',
-        osVersion: Device.osVersion || 'Unknown',
-      });
-    };
-
-    fetchDeviceData();
-
-    const batterySubscription = Battery.addBatteryLevelListener(({ batteryLevel }) => {
-      setBatteryLevel(batteryLevel);
-    });
-
-    return () => {
-      batterySubscription && batterySubscription.remove();
-    };
-  }, []);
-
-  // Touch Handlers
-  const handleTouchStart = (event: GestureResponderEvent) => {
-    const { pageX, pageY } = event.nativeEvent;
-    const timestamp = Date.now();
-    touchStartRef.current = { time: timestamp, x: pageX, y: pageY };
-
-    setTouchData(prev => ({
-      x: pageX,
-      y: pageY,
-      count: prev.count + 1,
-    }));
-  };
-
-  const handleTouchEnd = (event: GestureResponderEvent) => {
-    if (!touchStartRef.current) return;
-    
-    const { pageX, pageY, force } = event.nativeEvent;
-    const timestamp = Date.now();
-    const startTime = touchStartRef.current.time;
-    const startX = touchStartRef.current.x;
-    const startY = touchStartRef.current.y;
-
-    const dt = timestamp - startTime; // ms
-    const dx = pageX - startX;
-    const dy = pageY - startY;
-    const distance = Math.sqrt(dx * dx + dy * dy);
-    
-    const velocity = dt > 0 ? distance / dt : 0; // pixels/ms
-    const direction = Math.atan2(dy, dx) * (180 / Math.PI); // degrees
-
-    setTouchFeatures({
-      dwellTime: dt,
-      velocity: velocity * 1000, // pixels/sec
-      direction,
-      pressure: force || 0,
-    });
-    
-    touchStartRef.current = null;
-  };
-
-  // Scroll Handler
-  const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const { contentOffset } = event.nativeEvent;
-    const now = Date.now();
-    const currentY = contentOffset.y;
-
-    if (lastScrollRef.current) {
-      const dt = now - lastScrollRef.current.time;
-      const dy = currentY - lastScrollRef.current.y;
-      
-      if (dt > 0) {
-        const velocity = dy / dt; // pixels/ms
-        const prevVelocity = lastScrollRef.current.velocity;
-        const acceleration = (velocity - prevVelocity) / dt; // pixels/ms^2
-
-        setScrollFeatures({
-          velocity: Math.abs(velocity * 1000), // pixels/sec
-          acceleration: acceleration * 1000000, // scaled for readability
-          direction: dy > 0 ? 'Down' : dy < 0 ? 'Up' : 'None',
-        });
-        
-        lastScrollRef.current = { time: now, y: currentY, velocity };
-        return;
-      }
-    }
-
-    lastScrollRef.current = { time: now, y: currentY, velocity: 0 };
-  };
-
-  // Typing Handler
-  const handleTextChange = (text: string) => {
-    const now = Date.now();
-    if (lastKeyTimeRef.current > 0) {
-      const latency = now - lastKeyTimeRef.current;
-      setTypingFeatures({
-        interKeyLatency: latency,
-        typingSpeed: latency > 0 ? 60000 / latency : 0, // approx chars/min
-      });
-    }
-    lastKeyTimeRef.current = now;
-  };
-
-  const round = (n: number) => (n ? n.toFixed(3) : '0.000');
+  const tabs = ['Accounts', 'Save', 'Invest', 'Borrow', 'Shop & pay'];
 
   return (
     <View style={styles.container}>
-      <ScrollView 
-        contentContainerStyle={styles.scrollContent}
-        onScroll={handleScroll}
+      {/* Header */}
+      <View style={styles.header}>
+        <View style={styles.logo}>
+          <Text style={styles.logoText}>B</Text>
+          <Text style={styles.logoSubtext}>bob world</Text>
+        </View>
+        <View style={styles.headerRight}>
+          <TouchableOpacity 
+            style={styles.iconButton}
+            onPressIn={(e) => {
+              const { pageX, pageY, force } = e.nativeEvent;
+              collector?.recordTouchStart(pageX, pageY, force ?? 0, 'TOUCH_SEARCH');
+            }}
+            onPressOut={(e) => {
+              const { pageX, pageY, force } = e.nativeEvent;
+              collector?.recordTouchEnd(pageX, pageY, force ?? 0, 'TOUCH_SEARCH');
+            }}
+          >
+            <MaterialIcons name="search" size={24} color="#333" />
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.profileButton}
+            onPressIn={(e) => {
+              const { pageX, pageY, force } = e.nativeEvent;
+              collector?.recordTouchStart(pageX, pageY, force ?? 0, 'TOUCH_PROFILE');
+            }}
+            onPressOut={(e) => {
+              const { pageX, pageY, force } = e.nativeEvent;
+              collector?.recordTouchEnd(pageX, pageY, force ?? 0, 'TOUCH_PROFILE');
+            }}
+          >
+            <Text style={styles.profileText}>CV</Text>
+            <View style={styles.notificationDot} />
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* Tab Navigation */}
+      <View style={styles.tabWrapper}>
+        <ScrollView 
+          horizontal 
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.tabContentContainer}
+        >
+          {tabs.map((tab) => (
+            <TouchableOpacity
+              key={tab}
+              style={[styles.tab, selectedTab === tab && styles.tabActive]}
+              onPress={() => setSelectedTab(tab)}
+              onPressIn={(e) => {
+                const { pageX, pageY, force } = e.nativeEvent;
+                collector?.recordTouchStart(pageX, pageY, force ?? 0, `TOUCH_TAB_${tab.toUpperCase()}`);
+              }}
+              onPressOut={(e) => {
+                const { pageX, pageY, force } = e.nativeEvent;
+                collector?.recordTouchEnd(pageX, pageY, force ?? 0, `TOUCH_TAB_${tab.toUpperCase()}`);
+              }}
+            >
+              <Text style={[styles.tabText, selectedTab === tab && styles.tabTextActive]}>
+                {tab}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </View>
+
+      <ScrollView
+        style={styles.content}
         scrollEventThrottle={16}
-        onTouchStart={handleTouchStart}
-        onTouchEnd={handleTouchEnd}
-        onTouchCancel={handleTouchEnd}
+        showsVerticalScrollIndicator={false}
+        onScroll={(e) => {
+          const y = e.nativeEvent.contentOffset.y;
+          const dy = y - lastY.current;
+          lastY.current = y;
+          collector?.recordScroll(dy, 'SCROLL_DASHBOARD');
+        }}
       >
-        <Text style={styles.header}>Behavioral Data Capture</Text>
-
-        {/* Accelerometer Section */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Accelerometer (Raw)</Text>
-          <View style={styles.row}>
-            <Text style={styles.label}>X: {round(accelData.x)}</Text>
-            <Text style={styles.label}>Y: {round(accelData.y)}</Text>
-            <Text style={styles.label}>Z: {round(accelData.z)}</Text>
+        {/* Balance Card */}
+        <TouchableOpacity
+          style={styles.balanceCard}
+          activeOpacity={0.9}
+          onPress={() => router.push('/account')}
+          onPressIn={(e) => {
+            const { pageX, pageY, force } = e.nativeEvent;
+            collector?.recordTouchStart(pageX, pageY, force ?? 0, 'TOUCH_BALANCE_CARD');
+          }}
+          onPressOut={(e) => {
+            const { pageX, pageY, force } = e.nativeEvent;
+            collector?.recordTouchEnd(pageX, pageY, force ?? 0, 'TOUCH_BALANCE_CARD');
+          }}
+        >
+          <Text style={styles.accountTitle}>Savings account - 2783</Text>
+          <View style={styles.balanceRow}>
+            <View>
+              <Text style={styles.balanceAmount}>
+                {showBalance ? '₹ 69,420' : '₹ X,XX,XXX'}
+              </Text>
+              <Text style={styles.balanceLabel}>Available balance</Text>
+            </View>
+            <TouchableOpacity 
+              style={styles.eyeButton}
+              onPress={() => setShowBalance(!showBalance)}
+              onPressIn={(e) => {
+                const { pageX, pageY, force } = e.nativeEvent;
+                collector?.recordTouchStart(pageX, pageY, force ?? 0, 'TOUCH_BALANCE_TOGGLE');
+              }}
+              onPressOut={(e) => {
+                const { pageX, pageY, force } = e.nativeEvent;
+                collector?.recordTouchEnd(pageX, pageY, force ?? 0, 'TOUCH_BALANCE_TOGGLE');
+              }}
+            >
+              <Text style={styles.eyeIcon}>👁️</Text>
+            </TouchableOpacity>
           </View>
+        </TouchableOpacity>
+
+        {/* Action Buttons */}
+        <View style={styles.actionButtons}>
+          <TouchableOpacity 
+            style={styles.pillButton}
+            onPress={() => router.push('/account')}
+            onPressIn={(e) => {
+              const { pageX, pageY, force } = e.nativeEvent;
+              collector?.recordTouchStart(pageX, pageY, force ?? 0, 'TOUCH_VIEW_ACCOUNTS');
+            }}
+            onPressOut={(e) => {
+              const { pageX, pageY, force } = e.nativeEvent;
+              collector?.recordTouchEnd(pageX, pageY, force ?? 0, 'TOUCH_VIEW_ACCOUNTS');
+            }}
+          >
+            <Text style={styles.pillButtonText}>View all accounts</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.pillButton}
+            onPress={() => router.push('/explore')}
+            onPressIn={(e) => {
+              const { pageX, pageY, force } = e.nativeEvent;
+              collector?.recordTouchStart(pageX, pageY, force ?? 0, 'TOUCH_TRANSACTION_HISTORY');
+            }}
+            onPressOut={(e) => {
+              const { pageX, pageY, force } = e.nativeEvent;
+              collector?.recordTouchEnd(pageX, pageY, force ?? 0, 'TOUCH_TRANSACTION_HISTORY');
+            }}
+          >
+            <Text style={styles.pillButtonText}>Transaction history</Text>
+          </TouchableOpacity>
         </View>
 
-        {/* Gyroscope Section */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Gyroscope (Raw)</Text>
-          <View style={styles.row}>
-            <Text style={styles.label}>X: {round(gyroData.x)}</Text>
-            <Text style={styles.label}>Y: {round(gyroData.y)}</Text>
-            <Text style={styles.label}>Z: {round(gyroData.z)}</Text>
-          </View>
+        {/* What's Trending Section */}
+        <View style={styles.trendingSection}>
+          <TouchableOpacity 
+            style={styles.trendingHeader}
+            onPress={() => setTrendingExpanded(!trendingExpanded)}
+            onPressIn={(e) => {
+              const { pageX, pageY, force } = e.nativeEvent;
+              collector?.recordTouchStart(pageX, pageY, force ?? 0, 'TOUCH_TRENDING_TOGGLE');
+            }}
+            onPressOut={(e) => {
+              const { pageX, pageY, force } = e.nativeEvent;
+              collector?.recordTouchEnd(pageX, pageY, force ?? 0, 'TOUCH_TRENDING_TOGGLE');
+            }}
+          >
+            <Text style={styles.trendingTitle}>What's trending</Text>
+            <View style={styles.trendingToggle}>
+              <Text style={styles.toggleIcon}>{trendingExpanded ? '🔼' : '🔽'}</Text>
+            </View>
+          </TouchableOpacity>
+
+          {trendingExpanded && (
+            <View style={styles.servicesGrid}>
+              {SERVICES.map((service) => (
+                <ServiceCard 
+                  key={service.id} 
+                  service={service} 
+                  collector={collector}
+                />
+              ))}
+            </View>
+          )}
         </View>
-
-        {/* Touch Interaction Section */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Touch Interaction (Raw)</Text>
-          <Text style={styles.text}>Count: {touchData.count}</Text>
-          <Text style={styles.text}>Last X: {touchData.x.toFixed(1)}</Text>
-          <Text style={styles.text}>Last Y: {touchData.y.toFixed(1)}</Text>
-        </View>
-
-        {/* Derived Features Header */}
-        <Text style={styles.sectionHeader}>Derived Behavioral Features</Text>
-
-        {/* Touch Patterns */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Touch Patterns</Text>
-          <Text style={styles.text}>Dwell Time: {touchFeatures.dwellTime.toFixed(0)} ms</Text>
-          <Text style={styles.text}>Velocity: {touchFeatures.velocity.toFixed(0)} px/s</Text>
-          <Text style={styles.text}>Direction: {touchFeatures.direction.toFixed(1)}°</Text>
-          <Text style={styles.text}>Pressure: {touchFeatures.pressure.toFixed(3)}</Text>
-        </View>
-
-        {/* Scroll Behaviour */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Scroll Behaviour</Text>
-          <Text style={styles.text}>Velocity: {scrollFeatures.velocity.toFixed(0)} px/s</Text>
-          <Text style={styles.text}>Acceleration: {scrollFeatures.acceleration.toFixed(2)}</Text>
-          <Text style={styles.text}>Direction: {scrollFeatures.direction}</Text>
-        </View>
-
-        {/* Typing Dynamics */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Typing Dynamics</Text>
-          <TextInput 
-            style={styles.input} 
-            placeholder="Type here to test dynamics..." 
-            onChangeText={handleTextChange}
-          />
-          <Text style={styles.text}>Inter-key Latency: {typingFeatures.interKeyLatency} ms</Text>
-          <Text style={styles.text}>Approx Speed: {typingFeatures.typingSpeed.toFixed(0)} CPM</Text>
-        </View>
-
-        {/* Context Signals */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Context Signals</Text>
-          <Text style={styles.text}>Orientation: {contextFeatures.orientation}</Text>
-          <Text style={styles.text}>Time: {contextFeatures.timeOfDay}</Text>
-        </View>
-
-        {/* Accelerometer Derived */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Accel Derived (Window: 2s)</Text>
-          <Text style={styles.text}>Magnitude: {round(accelFeatures.magnitude)}</Text>
-          <Text style={styles.text}>Mean Mag: {round(accelFeatures.mean)}</Text>
-          <Text style={styles.text}>Variance: {accelFeatures.variance.toFixed(5)}</Text>
-          <Text style={styles.text}>Entropy: {accelFeatures.entropy.toFixed(3)}</Text>
-        </View>
-
-        {/* Gyroscope Derived */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Gyro Derived (Window: 2s)</Text>
-          <Text style={styles.text}>Magnitude: {round(gyroFeatures.magnitude)}</Text>
-          <Text style={styles.text}>Mean Mag: {round(gyroFeatures.mean)}</Text>
-          <Text style={styles.text}>Variance: {gyroFeatures.variance.toFixed(5)}</Text>
-          <Text style={styles.text}>Entropy: {gyroFeatures.entropy.toFixed(3)}</Text>
-        </View>
-
-        {/* Device Information Section */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Device Info</Text>
-          <Text style={styles.text}>Model: {deviceInfo.model}</Text>
-          <Text style={styles.text}>OS Version: {deviceInfo.osVersion}</Text>
-          <Text style={styles.text}>
-            Battery: {batteryLevel !== null ? (batteryLevel * 100).toFixed(0) + '%' : 'Loading...'}
-          </Text>
-        </View>
-
-        <Text style={styles.footer}>Tap anywhere to update touch data</Text>
       </ScrollView>
     </View>
+  );
+}
+
+function ServiceCard({ 
+  service, 
+  collector 
+}: { 
+  service: Service;
+  collector: any;
+}) {
+  return (
+    <TouchableOpacity 
+      style={styles.serviceCard}
+      onPressIn={(e) => {
+        const { pageX, pageY, force } = e.nativeEvent;
+        collector?.recordTouchStart(pageX, pageY, force ?? 0, `TOUCH_SERVICE_${service.id}`);
+      }}
+      onPressOut={(e) => {
+        const { pageX, pageY, force } = e.nativeEvent;
+        collector?.recordTouchEnd(pageX, pageY, force ?? 0, `TOUCH_SERVICE_${service.id}`);
+      }}
+    >
+      <View style={styles.serviceIconContainer}>
+        <MaterialIcons name={service.icon} size={24} color="#5C6BC0" />
+        {service.badge && (
+          <View style={[
+            styles.serviceBadge,
+            service.badge === 'NEW' && styles.badgeNew,
+            service.badge === 'Free' && styles.badgeFree
+          ]}>
+            <Text style={styles.badgeText}>{service.badge}</Text>
+          </View>
+        )}
+      </View>
+      <Text style={styles.serviceName}>{service.name}</Text>
+    </TouchableOpacity>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#E8EAF6',
   },
-  scrollContent: {
-    padding: 20,
-    paddingBottom: 40,
-  },
+  
+  // Header
   header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#FFFFFF',
+    zIndex: 10,
+  },
+  logo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  logoText: {
     fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 20,
+    fontWeight: '700',
+    backgroundColor: '#FF5722',
+    width: 32,
+    height: 32,
     textAlign: 'center',
-    color: '#333',
-    marginTop: 40,
+    lineHeight: 32,
+    borderRadius: 4,
+    color: '#FFFFFF',
   },
-  sectionHeader: {
+  logoSubtext: {
+    fontSize: 12,
+    color: '#FF5722',
+    fontWeight: '600',
+  },
+  headerRight: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  iconButton: {
+    padding: 8,
+  },
+  iconText: {
     fontSize: 20,
-    fontWeight: 'bold',
-    marginTop: 20,
-    marginBottom: 10,
-    color: '#2c3e50',
-    borderBottomWidth: 2,
-    borderBottomColor: '#3498db',
-    paddingBottom: 5,
   },
-  card: {
-    backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
+  profileButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 2,
+    borderColor: '#5C6BC0',
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
+  },
+  profileText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#5C6BC0',
+  },
+  notificationDot: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#FF5722',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
+
+  // Tabs
+  tabWrapper: {
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E0E0E0',
+    zIndex: 10,
+  },
+  tabContentContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  tab: {
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    marginRight: 12,
+  },
+  tabActive: {
+    borderBottomWidth: 3,
+    borderBottomColor: '#FF5722',
+  },
+  tabText: {
+    fontSize: 13,
+    color: '#757575',
+    fontWeight: '500',
+  },
+  tabTextActive: {
+    color: '#212121',
+    fontWeight: '600',
+  },
+
+  // Content
+  content: {
+    flex: 1,
+    paddingHorizontal: 16,
+  },
+
+  // Balance Card
+  balanceCard: {
+    marginTop: 16,
+    padding: 20,
+    borderRadius: 16,
+    backgroundColor: '#FF7043',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowRadius: 8,
+    elevation: 4,
   },
-  cardTitle: {
-    fontSize: 18,
+  accountTitle: {
+    color: '#FFFFFF',
+    fontSize: 16,
     fontWeight: '600',
     marginBottom: 12,
-    color: '#444',
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
-    paddingBottom: 8,
   },
-  row: {
+  balanceRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'center',
   },
-  label: {
-    fontSize: 16,
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
-    color: '#555',
+  balanceAmount: {
+    color: '#FFFFFF',
+    fontSize: 28,
+    fontWeight: '700',
+    marginBottom: 4,
   },
-  text: {
-    fontSize: 16,
-    marginBottom: 6,
-    color: '#555',
+  balanceLabel: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    opacity: 0.9,
   },
-  input: {
+  eyeButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(92, 107, 192, 0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  eyeIcon: {
+    fontSize: 20,
+  },
+
+  // Action Buttons
+  actionButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 16,
+    marginBottom: 16,
+  },
+  pillButton: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 24,
     borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    padding: 10,
-    marginBottom: 10,
-    backgroundColor: '#fafafa',
+    borderColor: '#90A4AE',
+    backgroundColor: 'transparent',
+    alignItems: 'center',
   },
-  footer: {
+  pillButtonText: {
+    color: '#546E7A',
+    fontSize: 13,
+    fontWeight: '500',
+  },
+
+  // Trending Section
+  trendingSection: {
+    marginTop: 8,
+    marginBottom: 24,
+  },
+  trendingHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+  },
+  trendingTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#212121',
+  },
+  trendingToggle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#5C6BC0',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  toggleIcon: {
+    fontSize: 16,
+  },
+
+  // Services Grid
+  servicesGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginTop: 8,
+  },
+  serviceCard: {
+    width: (width - 52) / 4, // 4 columns with gaps
+    alignItems: 'center',
+    paddingVertical: 12,
+  },
+  serviceIconContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+    position: 'relative',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  serviceIcon: {
+    fontSize: 28,
+  },
+  serviceBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  badgeNew: {
+    backgroundColor: '#FF5252',
+  },
+  badgeFree: {
+    backgroundColor: '#4CAF50',
+  },
+  badgeText: {
+    color: '#FFFFFF',
+    fontSize: 9,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+  },
+  serviceName: {
+    fontSize: 11,
+    color: '#546E7A',
     textAlign: 'center',
-    color: '#888',
-    marginTop: 10,
-    fontStyle: 'italic',
+    lineHeight: 14,
   },
 });
