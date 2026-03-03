@@ -122,6 +122,47 @@ class ConfigService {
   }
 
   /**
+   * Call POST /login on the backend.
+   * Returns the server's LoginResponse payload.
+   */
+  async loginUser(username: string): Promise<{
+    username: string;
+    status: 'enrolling' | 'enrolled';
+    message: string;
+    seconds_remaining?: number | null;
+    accumulated_seconds?: number | null;
+    total_seconds?: number | null;
+  }> {
+    const restURL = await this.getRestURL();
+    const response = await fetch(`${restURL}/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username }),
+    });
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`Login failed (${response.status}): ${text}`);
+    }
+    return response.json();
+  }
+
+  /**
+   * Call POST /logout on the backend to save enrollment time.
+   */
+  async logoutUser(username: string): Promise<void> {
+    try {
+      const restURL = await this.getRestURL();
+      await fetch(`${restURL}/logout`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username }),
+      });
+    } catch (e) {
+      console.warn('[ConfigService] Logout notification failed:', e);
+    }
+  }
+
+  /**
    * Simple IP validation (basic format check)
    */
   private isValidIP(ip: string): boolean {

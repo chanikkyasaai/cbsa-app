@@ -14,6 +14,7 @@ const CONNECTION_TIMEOUT_MS = BACKEND_CONFIG.WS_CONNECTION_TIMEOUT_MS;
 
 type MessageCallback = (data: any) => void;
 type ConnectionCallback = (connected: boolean) => void;
+type EnrollmentCallback = (data: { status: string; message: string; user_id: string }) => void;
 
 export class WebSocketService {
   private ws: WebSocket | null = null;
@@ -28,6 +29,7 @@ export class WebSocketService {
 
   private onMessageCallback: MessageCallback | null = null;
   private onConnectionChangeCallback: ConnectionCallback | null = null;
+  private onEnrollmentCallback: EnrollmentCallback | null = null;
 
   constructor() {
     this.sessionId = this.generateSessionId();
@@ -81,6 +83,13 @@ export class WebSocketService {
   }
 
   /**
+   * Set callback for enrollment status messages from server
+   */
+  onEnrollmentStatus(callback: EnrollmentCallback) {
+    this.onEnrollmentCallback = callback;
+  }
+
+  /**
    * Connect to WebSocket server
    */
   connect(): Promise<void> {
@@ -127,6 +136,13 @@ export class WebSocketService {
           try {
             const data = JSON.parse(event.data);
             console.log('[WebSocket] Received:', data);
+
+            // Intercept enrollment status messages
+            if (data?.type === 'enrollment_status') {
+              this.onEnrollmentCallback?.(data);
+              return;
+            }
+
             this.onMessageCallback?.(data);
           } catch (e) {
             console.error('[WebSocket] Failed to parse message:', e);

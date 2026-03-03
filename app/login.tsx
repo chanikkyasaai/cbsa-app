@@ -1,4 +1,4 @@
-import { ThemedText } from '@/components/themed-text';
+﻿import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { behavioralService } from '@/services/BehavioralService';
 import { configService } from '@/services/ConfigService';
@@ -15,7 +15,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { useAuth } from './AuthContext';
+import { useAuth, EnrollmentStatus } from './AuthContext';
 
 interface PINKeypadKey {
   value: string;
@@ -24,6 +24,7 @@ interface PINKeypadKey {
 
 export default function LoginScreen() {
   const { login } = useAuth();
+  const [username, setUsername] = useState('');
   const [pin, setPin] = useState('');
   const [keypadSequence, setKeypadSequence] = useState<PINKeypadKey[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -136,6 +137,11 @@ export default function LoginScreen() {
   };
 
   const handleProceed = async () => {
+    if (!username.trim()) {
+      Alert.alert('Error', 'Please enter your username');
+      return;
+    }
+
     if (pin.length !== 4) {
       Alert.alert('Error', 'PIN must be 4 digits');
       return;
@@ -144,14 +150,31 @@ export default function LoginScreen() {
     setIsLoading(true);
 
     try {
-      // Simulated login success
-      await new Promise(res => setTimeout(res, 800));
+      // Call backend /login with username (PIN is not validated server-side)
+      const loginResp = await configService.loginUser(username.trim());
 
-      Alert.alert('Success', 'Login successful!');
-      login(); // triggers isLoggedIn = true
-      router.replace('/(tabs)');
+      const status = loginResp.status as EnrollmentStatus;
+      const secsRemaining = loginResp.seconds_remaining ?? null;
+
+      // Set user ID on WebSocket service so events are tagged
+      wsService.setUserId(username.trim());
+
+      login(username.trim(), status, secsRemaining);
+
+      if (status === 'enrolling') {
+        const remaining = secsRemaining != null ? `${Math.ceil(secsRemaining)}s remaining` : '';
+        Alert.alert(
+          'Enrollment Mode',
+          `Welcome ${username.trim()}!\nYou are in enrollment mode. ${remaining}\nUse the app normally to build your behavioral profile.`,
+          [{ text: 'OK', onPress: () => router.replace('/(tabs)') }]
+        );
+      } else {
+        Alert.alert('Welcome Back', `Hello, ${username.trim()}!`, [
+          { text: 'OK', onPress: () => router.replace('/(tabs)') },
+        ]);
+      }
     } catch (error) {
-      Alert.alert('Error', 'Login failed. Please try again.');
+      Alert.alert('Error', `Login failed: ${error}`);
       setPin('');
     } finally {
       setIsLoading(false);
@@ -234,10 +257,26 @@ export default function LoginScreen() {
       <ThemedView style={styles.container}>
         <View style={styles.mainContent}>
           <View style={styles.headerContainer}>
-            <ThemedText style={styles.title}>Enter login PIN</ThemedText>
+            <ThemedText style={styles.title}>Sign In</ThemedText>
+          </View>
+
+          {/* Username input */}
+          <View style={styles.usernameContainer}>
+            <Text style={styles.usernameLabel}>Username</Text>
+            <TextInput
+              style={styles.usernameInput}
+              placeholder="Enter username"
+              value={username}
+              onChangeText={setUsername}
+              autoCapitalize="none"
+              autoCorrect={false}
+              editable={!isLoading}
+              placeholderTextColor="#999"
+            />
           </View>
 
           <View style={styles.pinDisplayContainer}>
+            <Text style={styles.pinLabel}>PIN</Text>
             <View style={styles.pinDisplay}>
               {Array.from({ length: 4 }).map((_, index) => (
                 <View
@@ -323,13 +362,13 @@ export default function LoginScreen() {
             <TouchableOpacity
               style={[
                 styles.proceedButton,
-                { opacity: isLoading || pin.length !== 4 ? 0.5 : 1 },
+                { opacity: isLoading || pin.length !== 4 || !username.trim() ? 0.5 : 1 },
               ]}
               onPress={handleProceed}
-              disabled={isLoading || pin.length !== 4}
+              disabled={isLoading || pin.length !== 4 || !username.trim()}
             >
               <Text style={styles.proceedButtonText}>
-                {isLoading ? 'Processing...' : 'PROCEED'}
+                {isLoading ? 'Connecting...' : 'PROCEED'}
               </Text>
             </TouchableOpacity>
           </View>
@@ -351,7 +390,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   headerContainer: {
-    marginBottom: 30,
+    marginBottom: 20,
     alignItems: 'center',
   },
   title: {
@@ -360,13 +399,41 @@ const styles = StyleSheet.create({
     color: '#5B5B63',
     letterSpacing: 0.3,
   },
+  usernameContainer: {
+    width: '100%',
+    maxWidth: 320,
+    marginBottom: 16,
+  },
+  usernameLabel: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#5B5B63',
+    marginBottom: 6,
+  },
+  usernameInput: {
+    borderWidth: 1,
+    borderColor: '#BFBFBF',
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    fontSize: 15,
+    backgroundColor: '#FFFFFF',
+    color: '#2D3436',
+  },
   pinDisplayContainer: {
-    marginBottom: 30,
+    marginBottom: 20,
     alignItems: 'center',
     backgroundColor: '#D5D5D8',
     borderRadius: 35,
-    paddingVertical: 25,
+    paddingVertical: 20,
     paddingHorizontal: 50,
+  },
+  pinLabel: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#5B5B63',
+    marginBottom: 10,
+    letterSpacing: 1,
   },
   pinDisplay: {
     flexDirection: 'row',
@@ -409,7 +476,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   proceedButton: {
-    marginTop: 30,
+    marginTop: 10,
     width: '100%',
     maxWidth: 320,
     paddingVertical: 14,
@@ -429,7 +496,7 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 320,
     gap: 12,
-    marginTop: 20,
+    marginTop: 16,
   },
   configAccessButton: {
     paddingVertical: 12,

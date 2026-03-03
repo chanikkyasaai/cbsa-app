@@ -6,16 +6,29 @@ import 'react-native-reanimated';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { BehavioralProvider } from '@/services/BehavioralContext';
 import { behavioralService } from '@/services/BehavioralService';
+import { wsService } from '@/services/WebSocketService';
 import { useEffect } from 'react';
+import { Alert } from 'react-native';
 import { AuthProvider, useAuth } from './AuthContext';
 
 function RootLayoutNav() {
   const colorScheme = useColorScheme();
-  const { isLoggedIn } = useAuth();
+  const { isLoggedIn, username } = useAuth();
 
   useEffect(() => {
     if (isLoggedIn) {
       behavioralService.start();
+
+      // Listen for server-pushed enrollment complete notifications
+      wsService.onEnrollmentStatus((data) => {
+        if (data.status === 'enrollment_complete') {
+          Alert.alert(
+            'Enrollment Complete! 🎉',
+            data.message ||
+              'Your behavioral profile data has been collected. An administrator can now run training to activate your profile.',
+          );
+        }
+      });
     } else {
       behavioralService.stop();
     }
