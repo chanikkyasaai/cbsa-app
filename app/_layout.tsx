@@ -1,5 +1,5 @@
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { router, Stack, useRootNavigationState } from 'expo-router';
+import { router, Stack, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 
@@ -14,10 +14,14 @@ import { AuthProvider, useAuth } from './AuthContext';
 function RootLayoutNav() {
   const colorScheme = useColorScheme();
   const { isLoggedIn, username } = useAuth();
-  const navigationState = useRootNavigationState();
+  const segments = useSegments();
+  // segments is empty ([]) until the navigation container is ready and the
+  // first state event has fired; using this as a readiness signal avoids
+  // calling router.replace before assertIsReady() passes.
+  const isNavigationReady = segments.length > 0;
 
   useEffect(() => {
-    if (!navigationState?.key) return;
+    if (!isNavigationReady) return;
 
     if (isLoggedIn) {
       behavioralService.start();
@@ -36,7 +40,7 @@ function RootLayoutNav() {
       behavioralService.stop();
       router.replace('/login');
     }
-  }, [isLoggedIn, navigationState?.key]);
+  }, [isLoggedIn, isNavigationReady]);
 
   let content = (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
