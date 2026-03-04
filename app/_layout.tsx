@@ -1,5 +1,5 @@
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { router, Stack } from 'expo-router';
+import { router, Stack, useRootNavigationState } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 
@@ -14,8 +14,11 @@ import { AuthProvider, useAuth } from './AuthContext';
 function RootLayoutNav() {
   const colorScheme = useColorScheme();
   const { isLoggedIn, username } = useAuth();
+  const navigationState = useRootNavigationState();
 
   useEffect(() => {
+    if (!navigationState?.key) return;
+
     if (isLoggedIn) {
       behavioralService.start();
 
@@ -33,7 +36,7 @@ function RootLayoutNav() {
       behavioralService.stop();
       router.replace('/login');
     }
-  }, [isLoggedIn]);
+  }, [isLoggedIn, navigationState?.key]);
 
   let content = (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
