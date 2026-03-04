@@ -2,16 +2,16 @@
  * CBSA Backend Configuration
  */
 
-// Development
+// Development (local network)
 const DEV_CONFIG = {
   WS_URL: 'ws://192.168.1.3:8000/ws/behaviour',
   REST_URL: 'http://192.168.1.3:8000',
 };
 
-// Production (update with actual URLs)
+// Production — Azure App Service
 const PROD_CONFIG = {
-  WS_URL: 'wss://your-production-url.com/ws/behaviour',
-  REST_URL: 'https://your-production-url.com',
+  WS_URL: 'wss://behaviorbackend.azurewebsites.net/ws/behaviour',
+  REST_URL: 'https://behaviorbackend.azurewebsites.net',
 };
 
 // Use development config by default

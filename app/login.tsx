@@ -29,8 +29,8 @@ export default function LoginScreen() {
   const [keypadSequence, setKeypadSequence] = useState<PINKeypadKey[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [showIPConfig, setShowIPConfig] = useState(false);
-  const [backendIP, setBackendIP] = useState('192.168.1.3');
-  const [backendPort, setBackendPort] = useState('8000');
+  const [backendIP, setBackendIP] = useState('behaviorbackend.azurewebsites.net');
+  const [backendPort, setBackendPort] = useState('443');
   const [testingConnection, setTestingConnection] = useState(false);
 
   useEffect(() => {
@@ -193,20 +193,21 @@ export default function LoginScreen() {
           </View>
 
           <View style={styles.configCard}>
-            <Text style={styles.configLabel}>Backend IP Address</Text>
+            <Text style={styles.configLabel}>Backend Host / IP Address</Text>
             <TextInput
               style={styles.configInput}
-              placeholder="192.168.1.100"
+              placeholder="behaviorbackend.azurewebsites.net"
               value={backendIP}
               onChangeText={setBackendIP}
               editable={!testingConnection}
               placeholderTextColor="#999"
+              autoCapitalize="none"
             />
 
             <Text style={styles.configLabel}>Port</Text>
             <TextInput
               style={styles.configInput}
-              placeholder="8000"
+              placeholder="443"
               value={backendPort}
               onChangeText={setBackendPort}
               keyboardType="numeric"
@@ -216,9 +217,9 @@ export default function LoginScreen() {
 
             <View style={styles.configInfo}>
               <Text style={styles.configInfoText}>
-                WebSocket URL:{'\n'}
+                Endpoint:{'\n'}
                 <Text style={styles.configInfoBold}>
-                  ws://{backendIP}:{backendPort}/ws/behaviour
+                  https://{backendIP}{backendPort !== '443' ? `:${backendPort}` : ''}
                 </Text>
               </Text>
             </View>
