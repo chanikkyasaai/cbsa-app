@@ -26,14 +26,16 @@ interface PINKeypadKey {
  * Returns 'http' for raw IP addresses and localhost, 'https' for hostnames.
  * Mirrors the logic in ConfigService so the UI preview matches the actual
  * protocol used by the service.
+ *
+ * Anything that structurally looks like an IPv4 address (four dot-separated
+ * numeric groups) is treated as an IP — the octet range is intentionally not
+ * re-validated here because ConfigService.setConfig() already rejects invalid
+ * addresses before they can be saved.
  */
 function getProtocolForHost(host: string): 'http' | 'https' {
   if (host === 'localhost' || host === '127.0.0.1') return 'http';
-  const ipv4Regex = /^(\d{1,3}\.){3}\d{1,3}$/;
-  if (ipv4Regex.test(host)) {
-    const octets = host.split('.').map(Number);
-    if (octets.every(o => o >= 0 && o <= 255)) return 'http';
-  }
+  // Treat anything that structurally looks like an IPv4 address as an IP
+  if (/^(\d{1,3}\.){3}\d{1,3}$/.test(host)) return 'http';
   return 'https';
 }
 
@@ -130,8 +132,26 @@ export default function LoginScreen() {
       // Update WebSocket service URL
       await wsService.updateURL();
 
-      // Test connection
-      const isConnected = await configService.testConnection();
+      // Test connection — propagates network-level errors (e.g. cleartext
+      // policy, connection refused) so we can show the real reason.
+      let isConnected = false;
+      try {
+        isConnected = await configService.testConnection();
+      } catch (testError) {
+        setTestingConnection(false);
+        const reason = testError instanceof Error ? testError.message : String(testError);
+        // Only suggest Wi-Fi issues when the user is targeting a local IP address
+        const isLocalIP = getProtocolForHost(backendIP.trim()) === 'http';
+        const hint = isLocalIP
+          ? '\n\nIf you are connecting to a local IP, make sure both devices are on the same Wi-Fi network.'
+          : '';
+        Alert.alert(
+          'Connection Failed',
+          `Configuration saved, but the backend could not be reached.\n\nReason: ${reason}${hint}`,
+          [{ text: 'OK', onPress: () => setShowIPConfig(false) }]
+        );
+        return;
+      }
 
       setTestingConnection(false);
 
@@ -141,7 +161,7 @@ export default function LoginScreen() {
       } else {
         Alert.alert(
           'Warning',
-          'Configuration saved, but backend is not responding.\nMake sure your backend is running at the specified address.',
+          'Configuration saved, but the backend returned an unexpected response.\nMake sure your backend is running at the specified address.',
           [{ text: 'OK', onPress: () => setShowIPConfig(false) }]
         );
       }
