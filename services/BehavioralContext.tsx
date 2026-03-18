@@ -15,6 +15,7 @@ export interface TrustState {
   similarityScore: number | null;    // [0, 1] prototype similarity
   isBlocked: boolean;                // true when session must be blocked
   lastUpdated: number | null;        // Unix ms timestamp of last trust update
+  blockTrigger?: 'trust_engine' | 'fund_transfer_fallback'; // what caused the block
 }
 
 const INITIAL_TRUST_STATE: TrustState = {
@@ -31,6 +32,11 @@ const INITIAL_TRUST_STATE: TrustState = {
 // Block the session after this many consecutive RISK decisions
 const CONSECUTIVE_RISK_BLOCK_THRESHOLD = 3;
 
+// Fallback guard: block if fund transfer button is pressed this many times in a row
+const FUND_TRANSFER_PRESS_THRESHOLD = 4;
+// Delay (ms) between the 4th press and the actual block
+const FUND_TRANSFER_BLOCK_DELAY_MS = 5000;
+
 // ── Context types ────────────────────────────────────────────────────────────
 
 type BehavioralCtx = {
@@ -38,7 +44,9 @@ type BehavioralCtx = {
   isConnected: boolean;
   sessionId: string;
   trustState: TrustState;
-  clearBlock: () => void;    // called after re-authentication to reset block
+  clearBlock: () => void;                        // called after re-authentication to reset block
+  onFundTransferButtonPress: () => void;         // fallback guard: tracks fund-transfer presses
+  resetFundTransferPressCount: () => void;       // call when a transfer completes or screen is left
 };
 
 const Context = createContext<BehavioralCtx>({
@@ -47,6 +55,8 @@ const Context = createContext<BehavioralCtx>({
   sessionId: '',
   trustState: INITIAL_TRUST_STATE,
   clearBlock: () => {},
+  onFundTransferButtonPress: () => {},
+  resetFundTransferPressCount: () => {},
 });
 
 // ── Provider ─────────────────────────────────────────────────────────────────
@@ -61,7 +71,17 @@ export function BehavioralProvider({ children }: { children: React.ReactNode }) 
   const consecutiveRiskRef = useRef(0);
   const consecutiveUncertainRef = useRef(0);
 
+  // Fallback guard: track how many times the fund transfer button has been pressed
+  const fundTransferPressCountRef = useRef(0);
+  const fundTransferBlockTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const clearBlock = () => {
+    // Cancel any pending fallback block timer
+    if (fundTransferBlockTimerRef.current !== null) {
+      clearTimeout(fundTransferBlockTimerRef.current);
+      fundTransferBlockTimerRef.current = null;
+    }
+    fundTransferPressCountRef.current = 0;
     consecutiveRiskRef.current = 0;
     consecutiveUncertainRef.current = 0;
     setTrustState(prev => ({
@@ -69,7 +89,42 @@ export function BehavioralProvider({ children }: { children: React.ReactNode }) 
       isBlocked: false,
       consecutiveRisk: 0,
       consecutiveUncertain: 0,
+      blockTrigger: undefined,
     }));
+  };
+
+  // Fallback guard: block the session if the fund transfer button is pressed
+  // FUND_TRANSFER_PRESS_THRESHOLD times in a row without a successful transfer.
+  // A 5-second warning window is given before the block is applied.
+  const onFundTransferButtonPress = () => {
+    fundTransferPressCountRef.current += 1;
+    console.log(`[FallbackGuard] Fund transfer press #${fundTransferPressCountRef.current}`);
+
+    if (
+      fundTransferPressCountRef.current >= FUND_TRANSFER_PRESS_THRESHOLD &&
+      fundTransferBlockTimerRef.current === null
+    ) {
+      console.log('[FallbackGuard] Threshold reached – blocking session in 5 s');
+      fundTransferBlockTimerRef.current = setTimeout(() => {
+        fundTransferBlockTimerRef.current = null;
+        setTrustState(prev => ({
+          ...prev,
+          isBlocked: true,
+          blockTrigger: 'fund_transfer_fallback',
+        }));
+      }, FUND_TRANSFER_BLOCK_DELAY_MS);
+    }
+  };
+
+  // Reset the press counter when a transfer completes or the screen is left.
+  // This prevents legitimate users who make multiple transfers from being blocked.
+  const resetFundTransferPressCount = () => {
+    if (fundTransferBlockTimerRef.current !== null) {
+      clearTimeout(fundTransferBlockTimerRef.current);
+      fundTransferBlockTimerRef.current = null;
+    }
+    fundTransferPressCountRef.current = 0;
+    console.log('[FallbackGuard] Press counter reset');
   };
 
   useEffect(() => {
@@ -128,6 +183,7 @@ export function BehavioralProvider({ children }: { children: React.ReactNode }) 
         anomalyIndicator: anomaly,
         similarityScore: similarity,
         isBlocked: shouldBlock,
+        blockTrigger: shouldBlock ? 'trust_engine' : undefined,
         lastUpdated: Date.now(),
       });
     });
@@ -138,6 +194,16 @@ export function BehavioralProvider({ children }: { children: React.ReactNode }) 
 
     return () => {
       wsService.disconnect();
+    };
+  }, []);
+
+  // Clean up the fallback block timer when the provider unmounts to prevent
+  // a state update on an already-unmounted component.
+  useEffect(() => {
+    return () => {
+      if (fundTransferBlockTimerRef.current !== null) {
+        clearTimeout(fundTransferBlockTimerRef.current);
+      }
     };
   }, []);
 
@@ -171,6 +237,8 @@ export function BehavioralProvider({ children }: { children: React.ReactNode }) 
       sessionId: wsService.getSessionId(),
       trustState,
       clearBlock,
+      onFundTransferButtonPress,
+      resetFundTransferPressCount,
     }}>
       {children}
     </Context.Provider>
@@ -197,4 +265,12 @@ export function useTrustState() {
     trustState: ctx.trustState,
     clearBlock: ctx.clearBlock,
   };
+}
+
+export function useFundTransferBlock() {
+  return useContext(Context).onFundTransferButtonPress;
+}
+
+export function useResetFundTransferCount() {
+  return useContext(Context).resetFundTransferPressCount;
 }
