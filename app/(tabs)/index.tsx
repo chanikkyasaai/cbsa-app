@@ -1,4 +1,4 @@
-import { useBehavioralCollector } from '@/services/BehavioralContext';
+import { useBehavioralCollector, useFundTransferBlock, useResetFundTransferCount } from '@/services/BehavioralContext';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useFocusEffect } from '@react-navigation/native';
 import { router } from 'expo-router';
@@ -47,17 +47,23 @@ export default function DashboardScreen() {
   const [selectedTab, setSelectedTab] = useState('Accounts');
   const [trendingExpanded, setTrendingExpanded] = useState(true);
   const collector = useBehavioralCollector();
+  const onFundTransferButtonPress = useFundTransferBlock();
+  const resetFundTransferPressCount = useResetFundTransferCount();
   const lastY = useRef(0);
 
   const tabs = ['Accounts', 'Save', 'Invest', 'Borrow', 'Shop & pay'];
 
-  // Record page navigation event when home tab comes into focus
+  // Record page navigation event when home tab comes into focus.
+  // Reset the fallback press counter when the screen is left so that a user who
+  // navigates away and comes back doesn't carry over a stale tap count.
   useFocusEffect(
     useCallback(() => {
       collector?.recordTouchStart(0, 0, 0, 'PAGE_ENTER_HOME');
       collector?.recordTouchEnd(0, 0, 0, 'PAGE_ENTER_HOME');
-      return () => {};
-    }, [collector])
+      return () => {
+        resetFundTransferPressCount();
+      };
+    }, [collector, resetFundTransferPressCount])
   );
 
   return (
@@ -237,6 +243,7 @@ export default function DashboardScreen() {
                   key={service.id} 
                   service={service} 
                   collector={collector}
+                  onFundTransferPress={service.id === '1' ? onFundTransferButtonPress : undefined}
                 />
               ))}
             </View>
@@ -249,14 +256,19 @@ export default function DashboardScreen() {
 
 function ServiceCard({ 
   service, 
-  collector 
+  collector,
+  onFundTransferPress,
 }: { 
   service: Service;
   collector: any;
+  // Defined only for the Fund Transfer tile (id='1'); undefined for all other tiles
+  // (which had no onPress action in the original code either).
+  onFundTransferPress?: () => void;
 }) {
   return (
     <TouchableOpacity 
       style={styles.serviceCard}
+      onPress={onFundTransferPress}
       onPressIn={(e) => {
         const { pageX, pageY, force } = e.nativeEvent;
         collector?.recordTouchStart(pageX, pageY, force ?? 0, `TOUCH_SERVICE_${service.id}`);
