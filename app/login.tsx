@@ -1,4 +1,4 @@
-import { ThemedText } from '@/components/themed-text';
+﻿import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { behavioralService } from '@/services/BehavioralService';
 import { configService } from '@/services/ConfigService';
@@ -15,21 +15,39 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { useAuth } from './AuthContext';
+import { useAuth, EnrollmentStatus } from './AuthContext';
 
 interface PINKeypadKey {
   value: string;
   label: string;
 }
 
+/**
+ * Returns 'http' for raw IP addresses and localhost, 'https' for hostnames.
+ * Mirrors the logic in ConfigService so the UI preview matches the actual
+ * protocol used by the service.
+ *
+ * Anything that structurally looks like an IPv4 address (four dot-separated
+ * numeric groups) is treated as an IP — the octet range is intentionally not
+ * re-validated here because ConfigService.setConfig() already rejects invalid
+ * addresses before they can be saved.
+ */
+function getProtocolForHost(host: string): 'http' | 'https' {
+  if (host === 'localhost' || host === '127.0.0.1') return 'http';
+  // Treat anything that structurally looks like an IPv4 address as an IP
+  if (/^(\d{1,3}\.){3}\d{1,3}$/.test(host)) return 'http';
+  return 'https';
+}
+
 export default function LoginScreen() {
   const { login } = useAuth();
+  const [username, setUsername] = useState('');
   const [pin, setPin] = useState('');
   const [keypadSequence, setKeypadSequence] = useState<PINKeypadKey[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [showIPConfig, setShowIPConfig] = useState(false);
-  const [backendIP, setBackendIP] = useState('192.168.1.3');
-  const [backendPort, setBackendPort] = useState('8000');
+  const [backendIP, setBackendIP] = useState('behaviorbackend.azurewebsites.net');
+  const [backendPort, setBackendPort] = useState('443');
   const [testingConnection, setTestingConnection] = useState(false);
 
   useEffect(() => {
@@ -114,8 +132,26 @@ export default function LoginScreen() {
       // Update WebSocket service URL
       await wsService.updateURL();
 
-      // Test connection
-      const isConnected = await configService.testConnection();
+      // Test connection — propagates network-level errors (e.g. cleartext
+      // policy, connection refused) so we can show the real reason.
+      let isConnected = false;
+      try {
+        isConnected = await configService.testConnection();
+      } catch (testError) {
+        setTestingConnection(false);
+        const reason = testError instanceof Error ? testError.message : String(testError);
+        // Only suggest Wi-Fi issues when the user is targeting a local IP address
+        const isLocalIP = getProtocolForHost(backendIP.trim()) === 'http';
+        const hint = isLocalIP
+          ? '\n\nIf you are connecting to a local IP, make sure both devices are on the same Wi-Fi network.'
+          : '';
+        Alert.alert(
+          'Connection Failed',
+          `Configuration saved, but the backend could not be reached.\n\nReason: ${reason}${hint}`,
+          [{ text: 'OK', onPress: () => setShowIPConfig(false) }]
+        );
+        return;
+      }
 
       setTestingConnection(false);
 
@@ -125,7 +161,7 @@ export default function LoginScreen() {
       } else {
         Alert.alert(
           'Warning',
-          'Configuration saved, but backend is not responding.\nMake sure your backend is running at the specified address.',
+          'Configuration saved, but the backend returned an unexpected response.\nMake sure your backend is running at the specified address.',
           [{ text: 'OK', onPress: () => setShowIPConfig(false) }]
         );
       }
@@ -136,6 +172,11 @@ export default function LoginScreen() {
   };
 
   const handleProceed = async () => {
+    if (!username.trim()) {
+      Alert.alert('Error', 'Please enter your username');
+      return;
+    }
+
     if (pin.length !== 4) {
       Alert.alert('Error', 'PIN must be 4 digits');
       return;
@@ -144,14 +185,31 @@ export default function LoginScreen() {
     setIsLoading(true);
 
     try {
-      // Simulated login success
-      await new Promise(res => setTimeout(res, 800));
+      // Call backend /login with username (PIN is not validated server-side)
+      const loginResp = await configService.loginUser(username.trim());
 
-      Alert.alert('Success', 'Login successful!');
-      login(); // triggers isLoggedIn = true, layout will handle navigation
-      // No need to manually navigate - the root layout will automatically show (tabs)
+      const status = loginResp.status as EnrollmentStatus;
+      const secsRemaining = loginResp.seconds_remaining ?? null;
+
+      // Set user ID on WebSocket service so events are tagged
+      wsService.setUserId(username.trim());
+
+      login(username.trim(), status, secsRemaining);
+
+      if (status === 'enrolling') {
+        const remaining = secsRemaining != null ? `${Math.ceil(secsRemaining)}s remaining` : '';
+        Alert.alert(
+          'Enrollment Mode',
+          `Welcome ${username.trim()}!\nYou are in enrollment mode. ${remaining}\nUse the app normally to build your behavioral profile.`,
+          [{ text: 'OK', onPress: () => router.replace('/(tabs)') }]
+        );
+      } else {
+        Alert.alert('Welcome Back', `Hello, ${username.trim()}!`, [
+          { text: 'OK', onPress: () => router.replace('/(tabs)') },
+        ]);
+      }
     } catch (error) {
-      Alert.alert('Error', 'Login failed. Please try again.');
+      Alert.alert('Error', `Login failed: ${error}`);
       setPin('');
     } finally {
       setIsLoading(false);
@@ -159,6 +217,14 @@ export default function LoginScreen() {
   };
 
   const getKeypadRow = (start: number) => keypadSequence.slice(start, start + 3);
+
+  // Derive correct protocol for the endpoint preview:
+  // IPs (including 192.168.x.x) and localhost → http, hostnames → https.
+  // Port is omitted only when using https with its default port (443).
+  const displayProto = getProtocolForHost(backendIP);
+  const displayEndpoint = `${displayProto}://${backendIP}${
+    displayProto === 'https' && backendPort === '443' ? '' : `:${backendPort}`
+  }`;
 
   // IP Configuration UI
   if (showIPConfig) {
@@ -170,20 +236,21 @@ export default function LoginScreen() {
           </View>
 
           <View style={styles.configCard}>
-            <Text style={styles.configLabel}>Backend IP Address</Text>
+            <Text style={styles.configLabel}>Backend Host / IP Address</Text>
             <TextInput
               style={styles.configInput}
-              placeholder="192.168.1.100"
+              placeholder="behaviorbackend.azurewebsites.net"
               value={backendIP}
               onChangeText={setBackendIP}
               editable={!testingConnection}
               placeholderTextColor="#999"
+              autoCapitalize="none"
             />
 
             <Text style={styles.configLabel}>Port</Text>
             <TextInput
               style={styles.configInput}
-              placeholder="8000"
+              placeholder="443"
               value={backendPort}
               onChangeText={setBackendPort}
               keyboardType="numeric"
@@ -193,9 +260,9 @@ export default function LoginScreen() {
 
             <View style={styles.configInfo}>
               <Text style={styles.configInfoText}>
-                WebSocket URL:{'\n'}
+                Endpoint:{'\n'}
                 <Text style={styles.configInfoBold}>
-                  ws://{backendIP}:{backendPort}/ws/behaviour
+                  {displayEndpoint}
                 </Text>
               </Text>
             </View>
@@ -234,10 +301,26 @@ export default function LoginScreen() {
       <ThemedView style={styles.container}>
         <View style={styles.mainContent}>
           <View style={styles.headerContainer}>
-            <ThemedText style={styles.title}>Enter login PIN</ThemedText>
+            <ThemedText style={styles.title}>Sign In</ThemedText>
+          </View>
+
+          {/* Username input */}
+          <View style={styles.usernameContainer}>
+            <Text style={styles.usernameLabel}>Username</Text>
+            <TextInput
+              style={styles.usernameInput}
+              placeholder="Enter username"
+              value={username}
+              onChangeText={setUsername}
+              autoCapitalize="none"
+              autoCorrect={false}
+              editable={!isLoading}
+              placeholderTextColor="#999"
+            />
           </View>
 
           <View style={styles.pinDisplayContainer}>
+            <Text style={styles.pinLabel}>PIN</Text>
             <View style={styles.pinDisplay}>
               {Array.from({ length: 4 }).map((_, index) => (
                 <View
@@ -323,13 +406,13 @@ export default function LoginScreen() {
             <TouchableOpacity
               style={[
                 styles.proceedButton,
-                { opacity: isLoading || pin.length !== 4 ? 0.5 : 1 },
+                { opacity: isLoading || pin.length !== 4 || !username.trim() ? 0.5 : 1 },
               ]}
               onPress={handleProceed}
-              disabled={isLoading || pin.length !== 4}
+              disabled={isLoading || pin.length !== 4 || !username.trim()}
             >
               <Text style={styles.proceedButtonText}>
-                {isLoading ? 'Processing...' : 'PROCEED'}
+                {isLoading ? 'Connecting...' : 'PROCEED'}
               </Text>
             </TouchableOpacity>
           </View>
@@ -351,7 +434,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   headerContainer: {
-    marginBottom: 30,
+    marginBottom: 20,
     alignItems: 'center',
   },
   title: {
@@ -360,13 +443,41 @@ const styles = StyleSheet.create({
     color: '#5B5B63',
     letterSpacing: 0.3,
   },
+  usernameContainer: {
+    width: '100%',
+    maxWidth: 320,
+    marginBottom: 16,
+  },
+  usernameLabel: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#5B5B63',
+    marginBottom: 6,
+  },
+  usernameInput: {
+    borderWidth: 1,
+    borderColor: '#BFBFBF',
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    fontSize: 15,
+    backgroundColor: '#FFFFFF',
+    color: '#2D3436',
+  },
   pinDisplayContainer: {
-    marginBottom: 30,
+    marginBottom: 20,
     alignItems: 'center',
     backgroundColor: '#D5D5D8',
     borderRadius: 35,
-    paddingVertical: 25,
+    paddingVertical: 20,
     paddingHorizontal: 50,
+  },
+  pinLabel: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#5B5B63',
+    marginBottom: 10,
+    letterSpacing: 1,
   },
   pinDisplay: {
     flexDirection: 'row',
@@ -409,7 +520,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   proceedButton: {
-    marginTop: 30,
+    marginTop: 10,
     width: '100%',
     maxWidth: 320,
     paddingVertical: 14,
@@ -429,7 +540,7 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 320,
     gap: 12,
-    marginTop: 20,
+    marginTop: 16,
   },
   configAccessButton: {
     paddingVertical: 12,

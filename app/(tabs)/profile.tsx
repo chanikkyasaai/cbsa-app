@@ -1,4 +1,5 @@
 import { useBehavioralCollector } from '@/services/BehavioralContext';
+import { configService } from '@/services/ConfigService';
 import { useFocusEffect } from '@react-navigation/native';
 import { router } from 'expo-router';
 import { useCallback } from 'react';
@@ -6,7 +7,7 @@ import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useAuth } from '../AuthContext';
 
 export default function ProfileScreen() {
-  const { logout } = useAuth();
+  const { logout, username } = useAuth();
   const collector = useBehavioralCollector();
 
   // Record page navigation event when profile tab comes into focus
@@ -18,12 +19,19 @@ export default function ProfileScreen() {
     }, [collector])
   );
 
+  const handleLogout = async () => {
+    if (username) {
+      await configService.logoutUser(username);
+    }
+    logout();
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.card}>
-        <Text style={styles.name}>Venkat</Text>
+        <Text style={styles.name}>{username ?? 'User'}</Text>
         <Text style={styles.meta}>+91 ••••••4321</Text>
-        <Text style={styles.meta}>venkat@email.com</Text>
+        <Text style={styles.meta}>{username ? `${username}@cbsa.app` : ''}</Text>
       </View>
 
       <TouchableOpacity
@@ -35,7 +43,7 @@ export default function ProfileScreen() {
 
       <TouchableOpacity
         style={[styles.item, styles.logout]}
-        onPress={logout}
+        onPress={handleLogout}
       >
         <Text style={[styles.itemText, styles.logoutText]}>Logout</Text>
       </TouchableOpacity>
