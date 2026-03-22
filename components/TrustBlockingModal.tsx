@@ -61,7 +61,7 @@ export function TrustBlockingModal() {
     logout();       // navigate to login screen; starts fresh session
   };
 
-  const { trustScore, consecutiveRisk, anomalyIndicator, similarityScore, blockTrigger } = trustState;
+  const { trustScore, consecutiveRisk, anomalyIndicator, similarityScore } = trustState;
 
   return (
     <Modal
@@ -96,12 +96,12 @@ export function TrustBlockingModal() {
 
           {/* Reason */}
           <Text style={styles.reason}>
-            {blockTrigger === 'fund_transfer_fallback'
-              ? 'Suspicious fund transfer activity detected.'
-              : consecutiveRisk >= 3
+            {consecutiveRisk >= 3
               ? `${consecutiveRisk} consecutive RISK decisions recorded.`
               : trustScore !== null && trustScore < 0.20
               ? `Trust score collapsed to ${formatScore(trustScore)}.`
+              : anomalyIndicator !== null && anomalyIndicator > 0.7
+              ? `Anomaly signal elevated to ${formatScore(anomalyIndicator)}.`
               : 'Behavioral anomaly threshold exceeded.'}
           </Text>
 

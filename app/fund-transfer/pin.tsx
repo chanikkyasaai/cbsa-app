@@ -1,4 +1,4 @@
-import { useBehavioralCollector, useResetFundTransferCount } from '@/services/BehavioralContext';
+import { useBehavioralCollector } from '@/services/BehavioralContext';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useFocusEffect } from '@react-navigation/native';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -16,7 +16,6 @@ function shuffleArray<T>(arr: T[]): T[] {
 
 export default function TransferPinScreen() {
   const collector = useBehavioralCollector();
-  const resetFundTransferPressCount = useResetFundTransferCount();
   const params = useLocalSearchParams<{
     method: string;
     beneficiaryName: string;
@@ -50,7 +49,6 @@ export default function TransferPinScreen() {
       // In a real app this would validate against the server.
       // Here we accept any 6-digit PIN and proceed to success.
       setTimeout(() => {
-        resetFundTransferPressCount();
         router.replace({ pathname: '/fund-transfer/success', params } as any);
       }, 300);
     }
