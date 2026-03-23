@@ -100,6 +100,8 @@ export function TrustBlockingModal() {
               ? `${consecutiveRisk} consecutive RISK decisions recorded.`
               : trustScore !== null && trustScore < 0.20
               ? `Trust score collapsed to ${formatScore(trustScore)}.`
+              : anomalyIndicator !== null && anomalyIndicator > 0.7
+              ? `Anomaly signal elevated to ${formatScore(anomalyIndicator)}.`
               : 'Behavioral anomaly threshold exceeded.'}
           </Text>
 
